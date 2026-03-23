@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 """
 qmd-decay-query — Wrapper QMD avec decay temporel intelligent.
 Phase 3 du plan mémoire avancée.

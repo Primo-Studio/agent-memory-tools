@@ -1,24 +1,28 @@
 # Changelog
 
+## v2.0.0 (2026-03-23)
+### Major refactor — ClawHub skill format
+- **New unified Python modules** replacing shell scripts:
+  - `llm_client.py` — Unified LLM/embed client (LM Studio, Ollama, OpenAI)
+  - `multihop_search.py` — Multi-hop reasoning search with `--embed` mode
+  - `decay_search.py` — Temporal decay search
+  - `extract_facts.py` — Fact extraction with `--store` (→ agentMemory/Convex)
+  - `knowledge_graph.py` — Knowledge graph builder
+  - `selftest.py` — Setup validation (servers, QMD, graph)
+  - `tests.py` — 20 unit tests
+- **Centralized config** (`config.json`) with presets and per-script model overrides
+- **JSON retry** — `call_llm_json` retries once on parse failure
+- **GPT-OSS tag stripping** — handles `<|channel|>` tags in responses
+- **Graph scoring** — relevance-based file selection (not arbitrary limit)
+- **SKILL.md** — ClawHub-compatible skill manifest
+- **references/configuration.md** — Full setup guide
+
+### Legacy scripts preserved
+- `qmd-multihop`, `qmd-decay-query`, `build-knowledge-graph` — original shell/Python scripts
+- `extract-facts.md` — prompt template
+
 ## v1.1.0 (2026-03-23)
-
-### Corrections
-- **Compatibilité LM Studio** : tous les scripts fonctionnent maintenant avec l'API OpenAI-compatible (LM Studio, vLLM, etc.)
-  - `call_llm_ollama` : format `messages/choices` au lieu de `prompt/response`
-  - `embed_ollama` : parsing format OpenAI (`data[].embedding`) + fallback Ollama
-- **PATH system** : injection automatique `/opt/homebrew/bin` pour résoudre `node`/`qmd` introuvables
-- **SyntaxError** : `from __future__ import annotations` toujours en première position
-- **Fallback LLM** : les fallbacks vers `claude` CLI remplacés par LM Studio local
-- **Timeout** : `curl --max-time 120` sur les appels LLM (évite les blocages silencieux)
-- **Thinking tags** : strip automatique des balises `<think>` dans les réponses Qwen
-
-### Tests validés
-- `qmd-multihop` : 85% confiance, 5 résultats, 54s (Qwen 3.5 35B via LM Studio)
-- `qmd-decay-query` : 5 résultats avec scoring temporel correct
-- `build-knowledge-graph` : fonctionne, long mais stable
+- LM Studio compatibility (endpoints, PATH injection, thinking tags strip)
 
 ## v1.0.0 (2026-03-23)
-
-### Initial
-- Scripts adaptés depuis Koda (cloud) vers local (Ollama/LM Studio)
-- Modèles : `qwen/qwen3.5-35b-a3b` (LLM), `text-embedding-nomic-embed-text-v1.5` (embed)
+- Initial release: multihop, decay, knowledge graph scripts

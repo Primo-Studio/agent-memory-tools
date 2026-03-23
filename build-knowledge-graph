@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
-import os
 """
 build-knowledge-graph — Construit un graphe de connaissances léger à partir du workspace.
 
@@ -28,6 +24,7 @@ Mise à jour incrémentale :
 import subprocess
 import json
 import sys
+import os
 import glob
 import re
 from datetime import datetime
@@ -168,7 +165,7 @@ def extract_relations_llm(entities_by_file: dict, debug: bool = False) -> list[d
             print("  ⚠ Pas de clé OpenAI — skip relations", file=sys.stderr)
         return []
     
-    OPENAI_URL = "http://localhost:1234/v1/chat/completions"
+    OPENAI_URL = "https://api.openai.com/v1/chat/completions"
     
     # Construire les co-occurrences AVEC contexte
     cooccurrences = {}
@@ -256,13 +253,13 @@ def extract_relations_llm(entities_by_file: dict, debug: bool = False) -> list[d
         import time
         t0 = time.time()
         payload = json.dumps({
-            "model": "qwen/qwen3.5-35b-a3b",
+            "model": "gpt-5.4-nano",
             "messages": [{"role": "user", "content": prompt}],
             "max_completion_tokens": 2000
         })
         result = subprocess.run(
             ["curl", "-s", OPENAI_URL,
-             "-H", "Authorization: Bearer ollama",
+             "-H", f"Authorization: Bearer {api_key}",
              "-H", "Content-Type: application/json",
              "-d", payload],
             capture_output=True, text=True, timeout=30

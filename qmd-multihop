@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-import os as _os
-_os.environ["PATH"] = "/opt/homebrew/bin:" + _os.environ.get("HOME", "") + "/.bun/bin:" + _os.environ.get("PATH", "")
 """
 qmd-multihop — Recherche multi-hop avec raisonnement LLM local.
 Phase 4 du plan mémoire avancée.
@@ -34,7 +31,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 # ─── Configuration ───────────────────────────────────────────────
-OLLAMA_URL = "http://localhost:1234/v1/chat/completions"
+OLLAMA_URL = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "sonnet"  # Sonnet via Claude Code Max ($0) — meilleur raisonnement pour orchestration multihop
 MAX_HOPS = 4
 RESULTS_PER_HOP = 5
@@ -49,8 +46,8 @@ OPENAI_MODELS = {"gpt-5.4-nano", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-5-mini", "
 OPENCLAW_BIN = "/opt/homebrew/bin/openclaw"
 
 # Embed model
-DEFAULT_EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
-OLLAMA_EMBED_URL = "http://localhost:1234/v1/embeddings"
+DEFAULT_EMBED_MODEL = "nomic-embed-text-v2-moe"
+OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
 
 # ─── Prompt pour le LLM orchestrateur ───────────────────────────
 ORCHESTRATOR_PROMPT = """Tu es un assistant de recherche dans un workspace documenté.
@@ -117,7 +114,7 @@ def check_ollama() -> bool:
     try:
         result = subprocess.run(
             ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", 
-             "http://localhost:1234/v1/models"],
+             "http://localhost:11434/api/tags"],
             capture_output=True, text=True, timeout=5
         )
         return result.stdout.strip() == "200"
@@ -154,10 +151,6 @@ def embed_ollama(texts: list[str], model: str = DEFAULT_EMBED_MODEL) -> list[lis
             capture_output=True, text=True, timeout=120
         )
         data = json.loads(result.stdout)
-        # OpenAI format: {"data": [{"embedding": [...]}]}
-        if "data" in data:
-            return [d["embedding"] for d in data["data"]]
-        # Ollama format fallback
         return data.get("embeddings", [])
     except Exception:
         return []
@@ -315,13 +308,13 @@ Résultats:
         import time
         t0 = time.time()
         payload = json.dumps({
-            "model": "qwen/qwen3.5-35b-a3b",
+            "model": "gpt-5.4-nano",
             "messages": [{"role": "user", "content": prompt}],
             "max_completion_tokens": 500
         })
         result = subprocess.run(
-            ["curl", "-s", "http://localhost:1234/v1/chat/completions",
-             "-H", "Authorization: Bearer ollama",
+            ["curl", "-s", "https://api.openai.com/v1/chat/completions",
+             "-H", f"Authorization: Bearer {api_key}",
              "-H", "Content-Type: application/json",
              "-d", payload],
             capture_output=True, text=True, timeout=15
@@ -460,38 +453,31 @@ def call_llm_claude(prompt: str, debug: bool = False) -> dict | None:
 
 
 def call_llm_ollama(prompt: str, model: str, debug: bool = False) -> dict | None:
-    """Appelle un modele LM Studio (OpenAI-compatible)."""
+    """Appelle un modèle Ollama local."""
     payload = json.dumps({
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-        "max_tokens": 2048,
+        "prompt": f"/no_think\n{prompt}",
+        "stream": False,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 2048,
+        }
     })
     try:
         result = subprocess.run(
-            ["curl", "-s", "--max-time", "120",
-             "http://localhost:1234/v1/chat/completions",
-             "-H", "Content-Type: application/json",
-             "-d", payload],
-            capture_output=True, text=True, timeout=130
+            ["curl", "-s", OLLAMA_URL, "-d", payload],
+            capture_output=True, text=True, timeout=60
         )
         if result.returncode != 0:
             return None
         response = json.loads(result.stdout)
-        if "error" in response:
-            if debug:
-                print(f"  LM Studio error: {response['error']}", file=sys.stderr)
-            return None
-        text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-        import re as _re
-        if "<think>" in text:
-            text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL).strip()
+        text = response.get("response", "")
         if debug:
-            print(f"  LLM (lmstudio/{model}): {text[:200]}", file=sys.stderr)
+            print(f"  LLM (ollama/{model}): {text[:200]}", file=sys.stderr)
         return extract_json(text)
     except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as e:
         if debug:
-            print(f"  LM Studio exception: {e}", file=sys.stderr)
+            print(f"  ⚠ Ollama exception: {e}", file=sys.stderr)
         return None
 
 
@@ -501,7 +487,7 @@ def call_llm_openai(prompt: str, model: str = "gpt-5.4-nano", debug: bool = Fals
     if not api_key:
         if debug:
             print(f"  ⚠ Pas de clé OpenAI, fallback claude", file=sys.stderr)
-        return call_llm_ollama(prompt, "qwen/qwen3.5-35b-a3b", debug=debug)
+        return call_llm_claude(prompt, debug=debug)
     
     try:
         import time
@@ -512,8 +498,8 @@ def call_llm_openai(prompt: str, model: str = "gpt-5.4-nano", debug: bool = Fals
             "max_completion_tokens": 2000
         })
         result = subprocess.run(
-            ["curl", "-s", "http://localhost:1234/v1/chat/completions",
-             "-H", "Authorization: Bearer ollama",
+            ["curl", "-s", "https://api.openai.com/v1/chat/completions",
+             "-H", f"Authorization: Bearer {api_key}",
              "-H", "Content-Type: application/json",
              "-d", payload],
             capture_output=True, text=True, timeout=20
@@ -522,7 +508,7 @@ def call_llm_openai(prompt: str, model: str = "gpt-5.4-nano", debug: bool = Fals
         if "error" in response:
             if debug:
                 print(f"  ⚠ OpenAI error: {response['error']['message'][:80]}", file=sys.stderr)
-            return call_llm_ollama(prompt, "qwen/qwen3.5-35b-a3b", debug=debug)
+            return call_llm_claude(prompt, debug=debug)
         
         text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
         elapsed = time.time() - t0
@@ -532,7 +518,7 @@ def call_llm_openai(prompt: str, model: str = "gpt-5.4-nano", debug: bool = Fals
     except Exception as e:
         if debug:
             print(f"  ⚠ OpenAI exception: {e}, fallback claude", file=sys.stderr)
-        return call_llm_ollama(prompt, "qwen/qwen3.5-35b-a3b", debug=debug)
+        return call_llm_claude(prompt, debug=debug)
 
 
 def call_llm(prompt: str, model: str, debug: bool = False) -> dict | None:
@@ -540,7 +526,7 @@ def call_llm(prompt: str, model: str, debug: bool = False) -> dict | None:
     if model in OPENAI_MODELS:
         return call_llm_openai(prompt, model, debug=debug)
     elif model in CLOUD_MODELS or model == "claude":
-        return call_llm_ollama(prompt, "qwen/qwen3.5-35b-a3b", debug=debug)
+        return call_llm_claude(prompt, debug=debug)
     else:
         return call_llm_ollama(prompt, model, debug=debug)
 

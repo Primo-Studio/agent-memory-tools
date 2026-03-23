@@ -1,0 +1,70 @@
+{
+  "llm": {
+    "provider": "lmstudio",
+    "baseUrl": "http://localhost:1234/v1",
+    "model": "qwen/qwen3.5-35b-a3b",
+    "temperature": 0.1,
+    "maxTokens": 2048,
+    "timeoutSeconds": 120
+  },
+  "embeddings": {
+    "provider": "lmstudio",
+    "baseUrl": "http://localhost:1234/v1",
+    "model": "text-embedding-nomic-embed-text-v1.5",
+    "dimensions": 768,
+    "contextLength": 512,
+    "chunkTokens": 400,
+    "chunkOverlap": 50
+  },
+  "paths": {
+    "workspace": "/Users/primostudio/.openclaw/workspace",
+    "cache": ".cache",
+    "knowledgeGraph": ".cache/knowledge-graph.json",
+    "embedCache": ".cache/embed-chunks.json"
+  },
+  "qmd": {
+    "collection": "workspace",
+    "defaultLimit": 10
+  },
+  "search": {
+    "maxHops": 4,
+    "confidenceThreshold": 0.6,
+    "decayHalfLifeDays": 14,
+    "protectedCategories": [
+      "savoir",
+      "erreur"
+    ]
+  },
+  "scriptOverrides": {
+    "multihop": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
+    "extract": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
+    "decay": {},
+    "graph": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } }
+  },
+  "presets": {
+    "ollama": {
+      "llm": {
+        "baseUrl": "http://localhost:11434",
+        "model": "qwen3.5:27b",
+        "apiFormat": "ollama"
+      },
+      "embeddings": {
+        "baseUrl": "http://localhost:11434",
+        "model": "nomic-embed-text-v2-moe",
+        "apiFormat": "ollama"
+      }
+    },
+    "openai": {
+      "llm": {
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "apiFormat": "openai"
+      },
+      "embeddings": {
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "text-embedding-3-small",
+        "apiFormat": "openai"
+      }
+    }
+  }
+}
