@@ -533,7 +533,7 @@ def recall(question: str, cfg: dict | None = None, top: int = 8,
     
     total_time = time.time() - t0
     
-    return {
+    result = {
         "answer": answer.get("answer") if answer else None,
         "confidence": answer.get("confidence", 0) if answer else None,
         "results": final,
@@ -546,11 +546,100 @@ def recall(question: str, cfg: dict | None = None, top: int = 8,
         },
         "sources_cited": answer.get("sources", []) if answer else [],
     }
+    
+    # Feedback: log query for later analysis
+    _log_feedback(question, result, cfg)
+    
+    return result
+
+
+def _log_feedback(question: str, result: dict, cfg: dict):
+    """Log recall query + results for feedback analysis."""
+    try:
+        ws = cfg.get("paths", {}).get("workspace", ".")
+        feedback_dir = os.path.join(ws, ".cache", "recall-feedback")
+        os.makedirs(feedback_dir, exist_ok=True)
+        
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "question": question,
+            "confidence": result.get("confidence", 0),
+            "total_results": result.get("stats", {}).get("total_results", 0),
+            "per_source": result.get("stats", {}).get("per_source", {}),
+            "total_time": result.get("stats", {}).get("total_time", 0),
+            "top_results": [
+                {
+                    "filepath": r.get("filepath", ""),
+                    "score": round(r.get("composite_score", 0), 4),
+                    "sources": r.get("sources", []),
+                    "useful": None,  # To be filled by feedback
+                }
+                for r in result.get("results", [])[:8]
+            ],
+        }
+        
+        # Append to JSONL log
+        log_path = os.path.join(feedback_dir, "queries.jsonl")
+        with open(log_path, "a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # Never break pipeline for feedback logging
+
+
+def feedback_stats(cfg: dict) -> dict:
+    """Analyze feedback logs: which sources perform best, avg confidence, etc."""
+    ws = cfg.get("paths", {}).get("workspace", ".")
+    log_path = os.path.join(ws, ".cache", "recall-feedback", "queries.jsonl")
+    
+    if not os.path.exists(log_path):
+        return {"error": "No feedback data yet"}
+    
+    queries = []
+    with open(log_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    queries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    
+    if not queries:
+        return {"error": "No valid feedback entries"}
+    
+    total = len(queries)
+    avg_conf = sum(q.get("confidence", 0) for q in queries) / total
+    avg_time = sum(q.get("total_time", 0) for q in queries) / total
+    
+    # Source contribution stats
+    source_hits = {}
+    source_top1 = {}
+    for q in queries:
+        for i, r in enumerate(q.get("top_results", [])):
+            for src in r.get("sources", []):
+                source_hits[src] = source_hits.get(src, 0) + 1
+                if i == 0:
+                    source_top1[src] = source_top1.get(src, 0) + 1
+    
+    # Useful/not useful (if feedback provided)
+    useful_count = sum(1 for q in queries for r in q.get("top_results", []) if r.get("useful") is True)
+    not_useful_count = sum(1 for q in queries for r in q.get("top_results", []) if r.get("useful") is False)
+    
+    return {
+        "total_queries": total,
+        "avg_confidence": round(avg_conf, 3),
+        "avg_time_seconds": round(avg_time, 2),
+        "source_appearances_in_top8": source_hits,
+        "source_top1": source_top1,
+        "feedback_provided": useful_count + not_useful_count,
+        "useful": useful_count,
+        "not_useful": not_useful_count,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description="Unified memory recall pipeline")
-    parser.add_argument("question", help="Question to recall")
+    parser.add_argument("question", nargs="?", help="Question to recall")
     parser.add_argument("--top", type=int, default=8, help="Top results to keep")
     parser.add_argument("--rerank", action="store_true", default=True, help="LLM reranking (default: on)")
     parser.add_argument("--no-rerank", action="store_true", help="Skip LLM reranking")
@@ -558,7 +647,17 @@ def main():
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--json", action="store_true", help="Output full JSON")
     parser.add_argument("--preset", help="Config preset (ollama, openai)")
+    parser.add_argument("--stats", action="store_true", help="Show feedback statistics")
     args = parser.parse_args()
+    
+    if args.stats:
+        cfg = load_config(preset=args.preset, script="recall")
+        stats = feedback_stats(cfg)
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+        return
+    
+    if not args.question:
+        parser.error("question is required (unless --stats)")
     
     cfg = load_config(preset=args.preset, script="recall")
     
