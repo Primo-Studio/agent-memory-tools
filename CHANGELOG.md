@@ -1,3 +1,21 @@
+## v2.4.0 — Auto-Ingestion (2026-03-23)
+
+### Added
+- `auto_ingest.py` — Watch/scan workspace, extract facts → agentMemory + update embed cache
+  - `--scan`: one-shot scan of recently modified files
+  - `--watch`: continuous fswatch daemon
+  - `--file path.md`: ingest single file
+  - `--post-compaction "text"`: extract from LCM compaction output
+- Content-hash dedup: skip files unchanged since last ingestion
+- Cooldown: don't reprocess same file within 5 min
+- State tracking in `.cache/ingest-state.json`
+- Incremental embed cache updates for changed files
+
+### Fixed
+- extract_facts.py: missing `subprocess` import
+- Config: extract override switched to gemma3:4b (non-thinking), maxTokens 2048
+- Large files truncated to ~4000 chars to stay within model context
+
 ## v2.2.0 — Synthesis Fix + Qwen Thinking Support (2026-03-23)
 
 ### Fixed

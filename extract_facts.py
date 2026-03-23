@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 
-import argparse, json, sys
+import argparse, json, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
