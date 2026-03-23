@@ -116,5 +116,71 @@ class TestMultihopHelpers(unittest.TestCase):
         self.assertGreater(len(enriched), 0)
 
 
+class TestUnifiedRecall(unittest.TestCase):
+    def test_import(self):
+        from unified_recall import recall, merge_results, score_result, compute_recency
+        self.assertTrue(callable(recall))
+    
+    def test_merge_dedup(self):
+        from unified_recall import merge_results
+        s1 = [{"filepath": "a.md", "text": "test", "source": "qmd", "score_raw": 0.5}]
+        s2 = [{"filepath": "a.md", "text": "test", "source": "embed", "score_raw": 0.8, "semantic_sim": 0.8}]
+        merged = merge_results([s1, s2])
+        # Should merge into 1 result with 2 sources
+        self.assertEqual(len(merged), 1)
+        self.assertIn("qmd", merged[0]["sources"])
+        self.assertIn("embed", merged[0]["sources"])
+        self.assertEqual(merged[0]["score_raw"], 0.8)  # Best score kept
+    
+    def test_merge_convex_unique(self):
+        from unified_recall import merge_results
+        s1 = [{"filepath": "agentMemory:savoir", "text": "fact A", "source": "convex"}]
+        s2 = [{"filepath": "agentMemory:savoir", "text": "fact B", "source": "convex"}]
+        merged = merge_results([s1, s2])
+        # Different facts = not merged
+        self.assertEqual(len(merged), 2)
+    
+    def test_recency_recent(self):
+        from unified_recall import compute_recency
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        score = compute_recency(f"memory/{today}.md")
+        self.assertGreater(score, 0.9)
+    
+    def test_recency_old(self):
+        from unified_recall import compute_recency
+        score = compute_recency("memory/2024-01-01.md")
+        self.assertLess(score, 0.2)
+    
+    def test_recency_protected(self):
+        from unified_recall import compute_recency
+        score = compute_recency("bugs/old-bug.md")
+        self.assertEqual(score, 0.7)  # Protected, no decay
+    
+    def test_score_result(self):
+        from unified_recall import score_result
+        cfg = load_config()
+        r = {
+            "filepath": "memory/2026-03-23.md",
+            "sources": ["embed", "qmd"],
+            "semantic_sim": 0.85,
+            "score_raw": 0.7,
+            "accessCount": 5,
+            "centrality": 3,
+        }
+        score = score_result(r, cfg)
+        self.assertGreater(score, 0.3)
+        self.assertLess(score, 1.0)
+    
+    def test_multi_source_bonus(self):
+        from unified_recall import score_result
+        cfg = load_config()
+        single = {"filepath": "test.md", "sources": ["qmd"], "score_raw": 0.5}
+        multi = {"filepath": "test.md", "sources": ["qmd", "embed"], "score_raw": 0.5}
+        s1 = score_result(single, cfg)
+        s2 = score_result(multi, cfg)
+        self.assertGreater(s2, s1)  # Multi-source should score higher
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

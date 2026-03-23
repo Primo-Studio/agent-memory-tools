@@ -63,7 +63,8 @@ def call_llm(prompt: str, cfg: dict | None = None, debug: bool = False) -> str |
             "model": llm["model"],
             "messages": [{"role": "user", "content": prompt}],
             "temperature": llm.get("temperature", 0.1),
-            "max_tokens": llm.get("maxTokens", 2048)
+            "max_tokens": llm.get("maxTokens", 2048),
+
         }
     
     timeout = llm.get("timeoutSeconds", 120)
@@ -84,16 +85,23 @@ def call_llm(prompt: str, cfg: dict | None = None, debug: bool = False) -> str |
         
         if api_format == "ollama":
             text = data.get("response", "")
+            # Qwen 3.x puts content in "thinking" field via Ollama
+            if not text and data.get("thinking"):
+                text = data["thinking"]
         else:
             msg = data.get("choices", [{}])[0].get("message", {})
             text = msg.get("content", "")
-            # GPT-OSS and reasoning models put content in "reasoning" field
-            if not text and msg.get("reasoning"):
-                text = msg["reasoning"]
+            # Fallback: reasoning models (GPT-OSS, Qwen) put content elsewhere
+            if not text:
+                text = msg.get("reasoning", "") or msg.get("reasoning_content", "")
         
         # Strip thinking tags (Qwen, DeepSeek)
         if "<think>" in text:
             text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        
+        # Strip "Thinking Process:" preamble (Qwen 3.x via Ollama — no <think> tags)
+        if text.startswith("Thinking Process:") or text.startswith("Thinking process:"):
+            text = text.strip()
         
         if debug:
             print(f"  LLM ({llm['model']}): {text[:200]}", file=sys.stderr)

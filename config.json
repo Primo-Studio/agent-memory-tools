@@ -38,6 +38,7 @@
   "scriptOverrides": {
     "multihop": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
     "extract": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
+    "recall": {},
     "decay": {},
     "graph": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } }
   },
