@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""
+build-knowledge-graph — Construit un graphe de connaissances léger à partir du workspace.
+
+Usage:
+    build-knowledge-graph [--debug] [--rebuild]
+    build-knowledge-graph --query "RSMA" [--depth 2]
+    build-knowledge-graph --stats
+
+Le graphe est un JSON simple stocké dans .cache/knowledge-graph.json.
+Il mappe des entités (clients, agents, projets, outils) vers leurs mentions et relations.
+
+Construction :
+1. Parse les fichiers clés du workspace (.md)
+2. Extrait les entités via patterns + Sonnet
+3. Trouve les co-occurrences (même fichier → lien)
+4. Sauvegarde le graphe
+
+Mise à jour incrémentale :
+- Quand un .md change, re-parser juste celui-là
+- Le fswatch existant peut déclencher un rebuild partiel
+"""
+
+import subprocess
+import json
+import sys
+import os
+import glob
+import re
+from datetime import datetime
+
+WORKSPACE = "/Users/primostudio/.openclaw/workspace"
+GRAPH_PATH = f"{WORKSPACE}/.cache/knowledge-graph.json"
+CLAUDE_BIN = "/Users/primostudio/.local/bin/claude"
+
+# Fichiers prioritaires pour l'extraction initiale
+PRIORITY_FILES = [
+    "COMPANY.md", "USER.md", "MEMORY.md", "TOOLS.md", "IDENTITY.md",
+    "agents/koda.md", "agents/sol.md", "agents/luna.md",
+    "projects/objectifs.md", "projects/bureau.md",
+    "projects/convex.md", "infra/servers.md",
+]
+
+# Patterns d'entités connus (regex)
+KNOWN_PATTERNS = {
+    "client": [
+        r"\bRSMA\b", r"\bTheobroma\b", r"\bKokolampoe\b", r"\bCTG\b",
+        r"\bDomaine du Lac Bleu\b", r"\bWest Event\b", r"\bGMF\b",
+        r"\bCCOG\b", r"\bSOGEA\b", r"\bArtisans?\s+Guyanais\b",
+    ],
+    "agent": [r"\bKoda\b", r"\bSol\b", r"\bLuna\b"],
+    "machine": [r"\bMac Studio\b", r"\bMac Mini\b", r"\biMac\b"],
+    "outil": [
+        r"\bConvex\b", r"\bVercel\b", r"\bNext\.js\b", r"\bOllama\b",
+        r"\bLM Studio\b", r"\bOpenClaw\b", r"\bQMD\b", r"\bLossless Claw\b",
+        r"\bCloudflare\b", r"\bGitHub\b", r"\bFigma\b", r"\bSentry\b",
+    ],
+    "projet": [
+        r"\bBureau\b", r"\bPrimask\b", r"\bPrimask\b", r"\bDockGroups\b",
+        r"\bCodexBar\b", r"\bSplitTrack\b", r"\bWeki\b",
+    ],
+    "personne": [
+        r"\bNeto\b", r"\bAlexandre\b", r"\bPierre\b",
+    ],
+}
+
+
+def load_graph() -> dict:
+    """Charge le graphe existant."""
+    if os.path.exists(GRAPH_PATH):
+        try:
+            with open(GRAPH_PATH, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"entities": {}, "meta": {"created": None, "updated": None, "files_processed": 0}}
+
+
+def build_normalized_relations(graph: dict) -> list[dict]:
+    """Extrait un array normalisé de relations depuis les entités.
+    Format: [{source, target, type, reverse_type?}]
+    Dédupliqué : chaque paire (source, target, type) n'apparaît qu'une fois.
+    """
+    seen = set()
+    relations = []
+    for entity_name, data in graph.get("entities", {}).items():
+        for rel_type, targets in data.get("relations", {}).items():
+            for target in targets:
+                # Clé unique (triée pour éviter doublons bidirectionnels)
+                key = tuple(sorted([entity_name, target])) + (rel_type,)
+                if key not in seen:
+                    seen.add(key)
+                    relations.append({
+                        "source": entity_name,
+                        "target": target,
+                        "type": rel_type,
+                    })
+    return relations
+
+
+def save_graph(graph: dict):
+    """Sauvegarde le graphe avec relations normalisées."""
+    os.makedirs(os.path.dirname(GRAPH_PATH), exist_ok=True)
+    graph["meta"]["updated"] = datetime.now().isoformat()
+    # Construire le tableau normalisé de relations
+    graph["relations"] = build_normalized_relations(graph)
+    graph["meta"]["relation_count"] = len(graph["relations"])
+    with open(GRAPH_PATH, "w") as f:
+        json.dump(graph, f, ensure_ascii=False, indent=2)
+
+
+def extract_entities_regex(content: str, filepath: str) -> list[dict]:
+    """Extraction d'entités par regex (rapide, 0 coût)."""
+    entities = []
+    for entity_type, patterns in KNOWN_PATTERNS.items():
+        for pattern in patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for m in matches:
+                name = m.group(0).strip()
+                # Normaliser le nom (première lettre maj, sauf outils avec casse spécifique)
+                name_norm = name
+                if entity_type in ("client", "personne", "agent"):
+                    name_norm = name.title()
+                elif entity_type == "machine":
+                    name_norm = name.title()
+                # Normaliser les outils connus
+                tool_norms = {"convex": "Convex", "vercel": "Vercel", "openclaw": "OpenClaw", 
+                              "github": "GitHub", "ollama": "Ollama", "qmd": "QMD", "figma": "Figma",
+                              "sentry": "Sentry", "cloudflare": "Cloudflare", "bureau": "Bureau",
+                              "primask": "Primask", "next.js": "Next.js"}
+                name_norm = tool_norms.get(name_norm.lower(), name_norm)
+                entities.append({
+                    "name": name_norm,
+                    "type": entity_type,
+                    "file": filepath,
+                    "context": content[max(0, m.start()-50):m.end()+50].replace("\n", " ").strip(),
+                })
+    return entities
+
+
+def get_openai_key() -> str:
+    """Récupère la clé API OpenAI depuis Mission Control (Convex agentSecrets)."""
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-X", "POST", "https://notable-dragon-607.convex.cloud/api/query",
+             "-H", "Content-Type: application/json",
+             "-d", '{"path":"agentSecrets:get","args":{"key":"openai_api_key"}}'],
+            capture_output=True, text=True, timeout=10
+        )
+        data = json.loads(result.stdout)
+        value = data.get("value", {})
+        if value and "value" in value:
+            return value["value"]
+    except Exception:
+        pass
+    # Fallback: variable d'environnement
+    return os.environ.get("OPENAI_API_KEY", "")
+
+
+def extract_relations_llm(entities_by_file: dict, debug: bool = False) -> list[dict]:
+    """Utilise GPT-4.1-mini (API OpenAI) pour extraire des relations entre entités co-occurrentes."""
+    api_key = get_openai_key()
+    if not api_key:
+        if debug:
+            print("  ⚠ Pas de clé OpenAI — skip relations", file=sys.stderr)
+        return []
+    
+    OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+    
+    # Construire les co-occurrences AVEC contexte
+    cooccurrences = {}
+    entity_contexts = {}  # name → meilleurs contextes
+    
+    for filepath, entities in entities_by_file.items():
+        # Collecter les contextes par entité
+        for e in entities:
+            name = e["name"]
+            ctx = e.get("context", "").strip()
+            if name not in entity_contexts:
+                entity_contexts[name] = {"type": e["type"], "contexts": []}
+            if ctx and len(entity_contexts[name]["contexts"]) < 3:
+                if ctx not in entity_contexts[name]["contexts"]:
+                    entity_contexts[name]["contexts"].append(ctx)
+        
+        names = list(set(e["name"] for e in entities))
+        for i, a in enumerate(names):
+            for b in names[i+1:]:
+                key = tuple(sorted([a, b]))
+                if key not in cooccurrences:
+                    cooccurrences[key] = []
+                cooccurrences[key].append(filepath)
+    
+    if not cooccurrences:
+        return []
+    
+    all_relations = []
+    pairs_list = list(cooccurrences.items())[:60]
+    
+    # Approche: envoyer des paragraphes de fichiers clés, pas des paires
+    # Le LLM lit le texte et extrait les relations qu'il VOIT, pas qu'il devine
+    key_files = [
+        "MEMORY.md", "IDENTITY.md", "COMPANY.md", "USER.md", "TOOLS.md",
+        "agents/sol.md", "agents/luna.md", "agents/comms.md", "agents/README.md",
+        "infra/servers.md", "projects/bureau.md", "projects/convex.md",
+    ]
+    
+    # Lire les fichiers et construire un contexte riche
+    workspace = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    file_excerpts = []
+    for kf in key_files:
+        path = os.path.join(workspace, kf)
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    text = f.read()[:2000]  # 2K par fichier max
+                file_excerpts.append(f"=== {kf} ===\n{text}\n")
+            except:
+                pass
+    
+    context_text = "\n".join(file_excerpts)
+    
+    # Entités connues pour guider l'extraction
+    known_entities = list(entity_contexts.keys())
+    
+    prompt = (
+        "Tu lis des fichiers d'un workspace dev web (Primo Studio, agence web en Guyane).\n"
+        "Extrais TOUTES les relations factuelles entre les entités listées.\n\n"
+        f"ENTITÉS CONNUES: {', '.join(known_entities)}\n\n"
+        "TYPES DE RELATIONS (sois précis, ne devine pas):\n"
+        "- héberge: machine physique qui fait tourner un agent/service\n"
+        "- utilise: outil/service utilisé par un projet/agent\n"
+        "- développe: qui code/maintient quoi\n"
+        "- dirige: management humain\n"
+        "- membre_de: appartenance à une organisation\n"
+        "- supervise: un agent supervise le travail d'un autre\n"
+        "- client_de: client qui paie l'entreprise\n"
+        "- déployé_sur: app/site hébergé sur une plateforme\n\n"
+        "CONTEXTE CLÉ (pour éviter les erreurs de direction):\n"
+        "- Neto Pompeu = humain, dirigeant de Primo Studio. IL dirige tout.\n"
+        "- Koda, Sol, Luna = agents IA. Koda supervise Sol et Luna.\n"
+        "- Neto dirige Koda (pas l'inverse). Koda supervise Sol (pas membre_de).\n"
+        "- Mac Mini héberge Sol. Mac Studio héberge Koda. iMac héberge Luna.\n\n"
+        "RÈGLES STRICTES:\n"
+        "- Ne retourne QUE les relations EXPLICITEMENT écrites dans le texte\n"
+        "- Si deux entités sont mentionnées ensemble mais sans lien clair → NE PAS les inclure\n"
+        "- Direction: a fait l'action vers b (\"a→b\"). Vérifier le sens !\n\n"
+        "Réponds UNIQUEMENT en JSON array:\n"
+        "[{\"a\":\"X\",\"b\":\"Y\",\"relation\":\"type\",\"direction\":\"a→b\"}]\n\n"
+        "FICHIERS:\n" + context_text
+    )
+    
+    try:
+        import time
+        t0 = time.time()
+        payload = json.dumps({
+            "model": "gpt-5.4-nano",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_completion_tokens": 2000
+        })
+        result = subprocess.run(
+            ["curl", "-s", OPENAI_URL,
+             "-H", f"Authorization: Bearer {api_key}",
+             "-H", "Content-Type: application/json",
+             "-d", payload],
+            capture_output=True, text=True, timeout=30
+        )
+        response = json.loads(result.stdout)
+        text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        elapsed = time.time() - t0
+        
+        # Extraire le JSON array
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start >= 0 and end > start:
+            relations = json.loads(text[start:end])
+            for r in relations:
+                if isinstance(r, dict) and "a" in r and "b" in r:
+                    all_relations.append(r)
+            
+            if debug:
+                usage = response.get("usage", {})
+                cost_in = usage.get("prompt_tokens", 0) * 0.4 / 1e6
+                cost_out = usage.get("completion_tokens", 0) * 1.6 / 1e6
+                print(f"  🔗 {len(all_relations)} relations en {elapsed:.1f}s (${cost_in+cost_out:.4f})", file=sys.stderr)
+    except Exception as e:
+        if debug:
+            print(f"  ⚠ GPT-4.1-mini error: {e}", file=sys.stderr)
+    
+    return all_relations
+
+
+def build_graph(debug: bool = False, rebuild: bool = False) -> dict:
+    """Construit le graphe complet."""
+    graph = {"entities": {}, "meta": {"created": datetime.now().isoformat(), "updated": None, "files_processed": 0}}
+    
+    if not rebuild:
+        existing = load_graph()
+        if existing.get("entities"):
+            graph = existing
+    
+    # Lister tous les .md
+    md_files = glob.glob(f"{WORKSPACE}/**/*.md", recursive=True)
+    skip = [".cache", "node_modules", "brain/references"]
+    
+    entities_by_file = {}
+    total_entities = 0
+    
+    for fpath in sorted(md_files):
+        relpath = fpath.replace(WORKSPACE + "/", "")
+        if any(s in relpath for s in skip):
+            continue
+        
+        try:
+            with open(fpath, "r") as f:
+                content = f.read()
+        except Exception:
+            continue
+        
+        if not content.strip():
+            continue
+        
+        entities = extract_entities_regex(content, relpath)
+        if entities:
+            entities_by_file[relpath] = entities
+            total_entities += len(entities)
+    
+    if debug:
+        print(f"  📊 {total_entities} mentions d'entités dans {len(entities_by_file)} fichiers", file=sys.stderr)
+    
+    # Construire le graphe d'entités
+    for filepath, entities in entities_by_file.items():
+        for e in entities:
+            name = e["name"]
+            if name not in graph["entities"]:
+                graph["entities"][name] = {
+                    "type": e["type"],
+                    "mentions": [],
+                    "relations": {},
+                    "contexts": [],
+                }
+            
+            ent = graph["entities"][name]
+            if filepath not in ent["mentions"]:
+                ent["mentions"].append(filepath)
+            
+            # Garder max 3 contextes
+            if len(ent["contexts"]) < 3:
+                ctx = e.get("context", "")
+                if ctx and ctx not in ent["contexts"]:
+                    ent["contexts"].append(ctx)
+    
+    # Extraire les relations via Sonnet
+    if debug:
+        print(f"  🤖 Extraction des relations via Sonnet...", file=sys.stderr)
+    
+    relations = extract_relations_llm(entities_by_file, debug=debug)
+    
+    # Index case-insensitive pour matcher les noms du LLM aux entités
+    entity_lookup = {}
+    for name in graph["entities"]:
+        entity_lookup[name.lower()] = name
+        # Aussi sans accents/espaces pour fuzzy
+        entity_lookup[name.lower().replace(" ", "")] = name
+    
+    def resolve_entity(name: str) -> str | None:
+        """Résout un nom d'entité du LLM vers le nom exact dans le graphe."""
+        if name in graph["entities"]:
+            return name
+        lower = name.lower()
+        if lower in entity_lookup:
+            return entity_lookup[lower]
+        # Sans espaces
+        nospace = lower.replace(" ", "")
+        if nospace in entity_lookup:
+            return entity_lookup[nospace]
+        # Prénom seul (ex: "Neto Pompeu" → "Neto")
+        first = lower.split()[0] if " " in lower else None
+        if first and first in entity_lookup:
+            return entity_lookup[first]
+        return None
+    
+    stored = 0
+    for rel in relations:
+        a_raw, b_raw = rel.get("a", ""), rel.get("b", "")
+        relation_type = rel.get("relation", "lié_à")
+        direction = rel.get("direction", "bidirectionnel")
+        
+        if relation_type == "aucune":
+            continue
+        
+        a = resolve_entity(a_raw)
+        b = resolve_entity(b_raw)
+        
+        if not a or not b or a == b:
+            continue
+        
+        # Ajouter la relation dans le graphe (direction a→b)
+        if relation_type not in graph["entities"][a]["relations"]:
+            graph["entities"][a]["relations"][relation_type] = []
+        if b not in graph["entities"][a]["relations"][relation_type]:
+            graph["entities"][a]["relations"][relation_type].append(b)
+            stored += 1
+        
+        # Relation inverse si bidirectionnelle
+        if "→" not in direction:
+            if relation_type not in graph["entities"][b]["relations"]:
+                graph["entities"][b]["relations"][relation_type] = []
+            if a not in graph["entities"][b]["relations"][relation_type]:
+                graph["entities"][b]["relations"][relation_type].append(a)
+    
+    if debug:
+        print(f"  📎 {stored} relations stockées dans le graphe", file=sys.stderr)
+    
+    graph["meta"]["files_processed"] = len(entities_by_file)
+    save_graph(graph)
+    
+    if debug:
+        print(f"  💾 Graphe sauvegardé: {len(graph['entities'])} entités, {len(relations)} relations", file=sys.stderr)
+    
+    return graph
+
+
+def query_graph(entity_name: str, depth: int = 1) -> dict:
+    """Requête le graphe pour une entité."""
+    graph = load_graph()
+    
+    if not graph["entities"]:
+        print("⚠ Graphe vide. Lancez: build-knowledge-graph --rebuild", file=sys.stderr)
+        return {}
+    
+    # Recherche insensible à la casse
+    match = None
+    for name in graph["entities"]:
+        if name.lower() == entity_name.lower():
+            match = name
+            break
+    
+    if not match:
+        # Recherche partielle
+        for name in graph["entities"]:
+            if entity_name.lower() in name.lower():
+                match = name
+                break
+    
+    if not match:
+        print(f"⚠ Entité '{entity_name}' non trouvée dans le graphe.", file=sys.stderr)
+        print(f"  Entités disponibles: {', '.join(sorted(graph['entities'].keys())[:20])}", file=sys.stderr)
+        return {}
+    
+    result = {"entity": match, "data": graph["entities"][match], "neighbors": {}}
+    
+    if depth > 0:
+        # Collecter les voisins
+        for rel_type, targets in graph["entities"][match].get("relations", {}).items():
+            for target in targets:
+                if target in graph["entities"]:
+                    result["neighbors"][target] = {
+                        "relation": rel_type,
+                        "type": graph["entities"][target]["type"],
+                        "mentions": graph["entities"][target]["mentions"][:3],
+                    }
+    
+    return result
+
+
+def print_stats(graph: dict):
+    """Affiche les stats du graphe."""
+    entities = graph.get("entities", {})
+    types = {}
+    total_mentions = 0
+    total_relations = 0
+    
+    for name, data in entities.items():
+        t = data.get("type", "inconnu")
+        types[t] = types.get(t, 0) + 1
+        total_mentions += len(data.get("mentions", []))
+        total_relations += sum(len(v) for v in data.get("relations", {}).values())
+    
+    print(f"📊 Knowledge Graph — Stats")
+    print(f"   Entités: {len(entities)}")
+    print(f"   Mentions: {total_mentions}")
+    print(f"   Relations: {total_relations}")
+    print(f"   Types: {json.dumps(types, ensure_ascii=False)}")
+    print(f"   Fichiers: {graph['meta'].get('files_processed', '?')}")
+    print(f"   Mis à jour: {graph['meta'].get('updated', '?')}")
+
+
+def main():
+    args = sys.argv[1:]
+    debug = "--debug" in args
+    rebuild = "--rebuild" in args
+    
+    if "--stats" in args:
+        graph = load_graph()
+        print_stats(graph)
+        return
+
+    if "--relations" in args:
+        graph = load_graph()
+        rels = graph.get("relations", build_normalized_relations(graph))
+        rel_type_filter = None
+        if "--type" in args:
+            ti = args.index("--type")
+            if ti + 1 < len(args):
+                rel_type_filter = args[ti + 1]
+        print(f"🔗 Relations normalisées ({len(rels)} total)")
+        for r in rels:
+            if rel_type_filter and r["type"] != rel_type_filter:
+                continue
+            print(f"  {r['source']} --{r['type']}--> {r['target']}")
+        if rel_type_filter:
+            filtered = [r for r in rels if r["type"] == rel_type_filter]
+            print(f"\n  ({len(filtered)} relations de type '{rel_type_filter}')")
+        return
+
+    if "--query" in args:
+        idx = args.index("--query")
+        if idx + 1 < len(args):
+            entity = args[idx + 1]
+            depth = 1
+            if "--depth" in args:
+                di = args.index("--depth")
+                if di + 1 < len(args):
+                    depth = int(args[di + 1])
+            
+            result = query_graph(entity, depth=depth)
+            if result:
+                ent = result["data"]
+                print(f"\n🔍 {result['entity']} ({ent['type']})")
+                print(f"   📁 Mentionné dans: {', '.join(ent['mentions'][:5])}")
+                if ent.get("relations"):
+                    print(f"   🔗 Relations:")
+                    for rel, targets in ent["relations"].items():
+                        print(f"      {rel}: {', '.join(targets)}")
+                if result.get("neighbors"):
+                    print(f"   👥 Voisins:")
+                    for name, info in result["neighbors"].items():
+                        print(f"      {name} ({info['type']}) — {info['relation']}")
+        return
+    
+    # Build par défaut
+    print("🔨 Construction du graphe de connaissances...", file=sys.stderr)
+    graph = build_graph(debug=debug, rebuild=rebuild)
+    print_stats(graph)
+
+
+if __name__ == "__main__":
+    main()
