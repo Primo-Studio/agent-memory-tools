@@ -1,3 +1,15 @@
+## v2.2.0 — Synthesis Fix + Qwen Thinking Support (2026-03-23)
+
+### Fixed
+- Synthesis now uses gemma3:4b (non-thinking model) — 2-8s vs 190s timeout with Qwen
+- LLM client: extract content from `thinking` field (Ollama) and `reasoning_content` (LM Studio)
+- Fallback plain-text synthesis when JSON still fails after retries
+- Graph results capped at 20 with relevance threshold (was flooding 229+)
+
+### Changed
+- Default recall LLM override: gemma3:4b via Ollama (fast, reliable JSON)
+- Config: scriptOverrides.recall for per-pipeline model selection
+
 ## v2.1.0 — Unified Recall Pipeline (2026-03-23)
 
 ### Added

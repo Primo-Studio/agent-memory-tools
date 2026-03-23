@@ -38,7 +38,7 @@
   "scriptOverrides": {
     "multihop": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
     "extract": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
-    "recall": {},
+    "recall": { "llm": { "baseUrl": "http://localhost:11434", "model": "gemma3:4b", "apiFormat": "ollama", "maxTokens": 1024, "timeoutSeconds": 60 } },
     "decay": {},
     "graph": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } }
   },
