@@ -35,7 +35,7 @@ def classify_file(filepath: str) -> str:
     for prefix, cat in CATEGORY_MAP.items():
         if filepath.startswith(prefix):
             return cat
-    if any(k in filepath.lower() for k in ["error", "bug", "lesson", "règle"]):
+    if any(k in filepath.lower() for k in ["error", "bug", "lesson", "rule"]):
         return "permanent"
     return "unknown"
 

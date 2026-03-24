@@ -181,7 +181,7 @@ def enrich_with_graph(query: str, results: list[dict], graph: dict, debug: bool 
 def synthesize(question: str, results: list[dict], cfg: dict, debug: bool = False) -> dict:
     """Ask LLM to synthesize an answer from search results."""
     if not results:
-        return {"action": "answer", "answer": "Aucun résultat trouvé.", "confidence": 0.0}
+        return {"action": "answer", "answer": "No results found.", "confidence": 0.0}
     
     context = "\n".join([
         f"[{r.get('filepath', '?')}:{r.get('line', '?')}] {r.get('text', '')[:500]}"
@@ -310,11 +310,11 @@ def main():
     else:
         icon = "✅" if result["confidence"] >= 0.7 else "💡" if result["confidence"] >= 0.4 else "⚠"
         print(f"\n{icon} {result['answer']}")
-        print(f"\n📊 Confiance: {int(result['confidence']*100)}% | Hops: {result['hops']} | Résultats: {result['total_results']}")
+        print(f"\n📊 Confidence: {int(result['confidence']*100)}% | Hops: {result['hops']} | Results: {result['total_results']}")
         if result.get("sources"):
             print(f"📎 Sources: {', '.join(result['sources'][:5])}")
         if result.get("forced"):
-            print("⚠ Synthèse forcée (confiance insuffisante)")
+            print("⚠ Forced synthesis (insufficient confidence)")
 
 
 if __name__ == "__main__":

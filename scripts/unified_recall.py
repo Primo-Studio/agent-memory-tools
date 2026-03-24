@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-unified_recall — Pipeline unifié de recall mémoire.
+unified_recall — Unified memory recall pipeline.
 Fan-out vers 4 sources, merge, scoring multi-signal, rerank LLM.
 
 Architecture:
@@ -419,7 +419,7 @@ Respond with ONLY a JSON array of integers, e.g. [3, 0, 7, 1]"""
 def synthesize(question: str, results: list[dict], cfg: dict, debug: bool = False) -> dict:
     """Synthesize answer from top results."""
     if not results:
-        return {"answer": "Aucun résultat trouvé.", "confidence": 0.0, "sources": []}
+        return {"answer": "No results found.", "confidence": 0.0, "sources": []}
     
     context = "\n".join([
         f"[{r.get('filepath', '?')}] (score:{r.get('composite_score', 0):.2f}, via:{'+'.join(r.get('sources', []))}) {r.get('text', '')[:400]}"
@@ -445,10 +445,10 @@ Respond in JSON:
     # Fallback: plain text synthesis (no JSON requirement)
     fallback_prompt = f"""Question: {question}
 
-Contexte de mémoire :
+Memory context:
 {context}
 
-Réponds à la question en te basant sur le contexte. Sois précis et cite les fichiers sources.
+Answer the question based on the context. Be precise and cite source files.
 Si le contexte ne contient pas assez d'info, dis-le."""
     
     text = call_llm(fallback_prompt, cfg, debug)
@@ -680,7 +680,7 @@ def main():
             conf = result.get("confidence", 0)
             icon = "✅" if conf >= 0.7 else "💡" if conf >= 0.4 else "⚠"
             print(f"\n{icon} {result['answer']}")
-            print(f"\n📊 Confiance: {int(conf*100)}%")
+            print(f"\n📊 Confidence: {int(conf*100)}%")
             if result.get("sources_cited"):
                 print(f"📎 Sources: {', '.join(result['sources_cited'][:5])}")
         

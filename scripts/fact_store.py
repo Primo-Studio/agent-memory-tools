@@ -68,13 +68,10 @@ def _jaccard(s1: set, s2: set) -> float:
 
 # ─── Convex backend ───
 
-CONVEX_URL = "https://notable-dragon-607.convex.cloud/api/mutation"
-CONVEX_QUERY_URL = "https://notable-dragon-607.convex.cloud/api/query"
-
-
-def _convex_call(path: str, args: dict, is_mutation: bool = False, timeout: int = 15) -> dict | None:
+def _convex_call(path: str, args: dict, is_mutation: bool = False, timeout: int = 15, convex_url: str = "") -> dict | None:
     """Call Convex API."""
-    url = CONVEX_URL if is_mutation else CONVEX_QUERY_URL
+    base = convex_url.rstrip("/")
+    url = f"{base}/api/mutation" if is_mutation else f"{base}/api/query"
     payload = json.dumps({"path": path, "args": args})
     try:
         r = subprocess.run(
@@ -89,34 +86,34 @@ def _convex_call(path: str, args: dict, is_mutation: bool = False, timeout: int 
     return None
 
 
-def _convex_store(fact: str, category: str, agent: str, confidence: float, source: str) -> dict:
+def _convex_store(fact: str, category: str, agent: str, confidence: float, source: str, convex_url: str = "") -> dict:
     result = _convex_call("agentMemory:store", {
         "fact": fact, "category": category, "agent": agent,
         "confidence": confidence, "source": source
-    }, is_mutation=True)
+    }, is_mutation=True, convex_url=convex_url)
     return result or {"action": "error"}
 
 
-def _convex_search(query: str, category: str = None, limit: int = 10) -> list:
+def _convex_search(query: str, category: str = None, limit: int = 10, convex_url: str = "") -> list:
     args = {"query": query, "limit": limit}
     if category:
         args["category"] = category
-    result = _convex_call("agentMemory:search", args)
+    result = _convex_call("agentMemory:search", args, convex_url=convex_url)
     return result if isinstance(result, list) else []
 
 
-def _convex_recent(limit: int = 20) -> list:
-    result = _convex_call("agentMemory:recent", {"limit": limit})
+def _convex_recent(limit: int = 20, convex_url: str = "") -> list:
+    result = _convex_call("agentMemory:recent", {"limit": limit}, convex_url=convex_url)
     return result if isinstance(result, list) else []
 
 
-def _convex_stats() -> dict:
-    result = _convex_call("agentMemory:stats", {})
+def _convex_stats(convex_url: str = "") -> dict:
+    result = _convex_call("agentMemory:stats", {}, convex_url=convex_url)
     return result or {}
 
 
-def _convex_forget(fact: str) -> bool:
-    result = _convex_call("agentMemory:forget", {"fact": fact}, is_mutation=True)
+def _convex_forget(fact: str, convex_url: str = "") -> bool:
+    result = _convex_call("agentMemory:forget", {"fact": fact}, is_mutation=True, convex_url=convex_url)
     return result is not None
 
 
@@ -244,31 +241,32 @@ class FactStore:
         self.cfg = cfg
         self.use_convex = _is_convex_configured(cfg)
         self.backend = "convex" if self.use_convex else "local"
+        self._convex_url = cfg.get("convexUrl", "") if self.use_convex else ""
     
     def store(self, fact: str, category: str = "savoir", agent: str = "koda",
               confidence: float = 0.8, source: str = "extract_facts") -> dict:
         if self.use_convex:
-            return _convex_store(fact, category, agent, confidence, source)
+            return _convex_store(fact, category, agent, confidence, source, self._convex_url)
         return _local_store(fact, category, agent, confidence, source, self.cfg)
     
     def search(self, query: str, category: str = None, limit: int = 10) -> list:
         if self.use_convex:
-            return _convex_search(query, category, limit)
+            return _convex_search(query, category, limit, self._convex_url)
         return _local_search(query, category, limit, self.cfg)
     
     def recent(self, limit: int = 20) -> list:
         if self.use_convex:
-            return _convex_recent(limit)
+            return _convex_recent(limit, self._convex_url)
         return _local_recent(limit, self.cfg)
     
     def stats(self) -> dict:
         if self.use_convex:
-            return _convex_stats()
+            return _convex_stats(self._convex_url)
         return _local_stats(self.cfg)
     
     def forget(self, fact: str) -> bool:
         if self.use_convex:
-            return _convex_forget(fact)
+            return _convex_forget(fact, self._convex_url)
         return _local_forget(fact, self.cfg)
     
     def __repr__(self):
