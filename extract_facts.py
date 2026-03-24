@@ -64,12 +64,19 @@ def extract(text: str, cfg: dict | None = None, debug: bool = False) -> list[dic
 CONVEX_URL = "https://notable-dragon-607.convex.cloud/api/mutation"
 
 
-def store_to_convex(facts: list[dict], agent: str = "koda", debug: bool = False) -> int:
-    """Store facts to agentMemory (Convex). Returns count stored."""
+def store_to_convex(facts: list[dict], agent: str = "koda", debug: bool = False,
+                    check_contradictions: bool = True) -> int:
+    """Store facts to agentMemory (Convex). Uses contradiction check by default.
+    Returns count stored."""
     stored = 0
+    contradictions = 0
+    # Use storeWithContradictionCheck if available, fallback to store
+    store_fn = "agentMemory:storeWithContradictionCheck" if check_contradictions else "agentMemory:store"
+    fell_back = False
+    
     for f in facts:
         payload = json.dumps({
-            "path": "agentMemory:store",
+            "path": store_fn,
             "args": {
                 "fact": f["fact"],
                 "category": f.get("category", "savoir"),
@@ -82,19 +89,52 @@ def store_to_convex(facts: list[dict], agent: str = "koda", debug: bool = False)
             result = subprocess.run(
                 ["curl", "-s", "-X", "POST", CONVEX_URL,
                  "-H", "Content-Type: application/json", "-d", payload],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, text=True, timeout=30
             )
             data = json.loads(result.stdout)
             if data.get("status") == "success":
-                stored += 1
+                value = data.get("value", {})
+                action = value.get("action", "?")
+                if action == "contradiction_detected":
+                    contradictions += 1
+                    if debug:
+                        print(f"  ⚠ Contradiction: {f['fact'][:60]}", file=sys.stderr)
+                        print(f"    Conflicts with: {value.get('conflictsWith', '?')[:60]}", file=sys.stderr)
+                else:
+                    stored += 1
+                    if debug:
+                        print(f"  → Stored ({action}): {f['fact'][:60]}", file=sys.stderr)
+            else:
+                err_msg = result.stdout if result.stdout else ""
+                # Auto-fallback on first failure of contradiction check
+                if check_contradictions and not fell_back and ("Server Error" in err_msg or "not a function" in err_msg or "Could not find" in err_msg):
+                    if debug:
+                        print(f"  → ContradictionCheck unavailable, falling back to store", file=sys.stderr)
+                    store_fn = "agentMemory:store"
+                    fell_back = True
+                    # Retry this fact with simple store
+                    payload2 = json.dumps({"path": "agentMemory:store", "args": {
+                        "fact": f["fact"], "category": f.get("category", "savoir"),
+                        "agent": agent, "confidence": f.get("confidence", 0.8), "source": "extract_facts"
+                    }})
+                    try:
+                        r2 = subprocess.run(["curl", "-s", "-X", "POST", CONVEX_URL,
+                            "-H", "Content-Type: application/json", "-d", payload2],
+                            capture_output=True, text=True, timeout=15)
+                        d2 = json.loads(r2.stdout)
+                        if d2.get("status") == "success":
+                            stored += 1
+                    except Exception:
+                        pass
+                    continue
                 if debug:
-                    action = data.get("value", {}).get("action", "?")
-                    print(f"  → Stored ({action}): {f['fact'][:60]}", file=sys.stderr)
-            elif debug:
-                print(f"  → Failed: {result.stdout[:100]}", file=sys.stderr)
+                    print(f"  → Failed: {err_msg[:100]}", file=sys.stderr)
         except Exception as e:
             if debug:
                 print(f"  → Error: {e}", file=sys.stderr)
+    
+    if contradictions > 0 and debug:
+        print(f"  ⚠ {contradictions} contradictions detected, {stored} stored", file=sys.stderr)
     return stored
 
 

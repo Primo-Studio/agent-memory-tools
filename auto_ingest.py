@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from llm_client import load_config, embed
 from extract_facts import extract as extract_facts, store_to_convex
+from knowledge_graph import update_graph_incremental
 
 # ---------------------------------------------------------------------------
 # Config
@@ -258,9 +259,16 @@ def scan_workspace(cfg: dict, state: dict, agent: str = "koda",
         total_stored += stored
         processed_files.append(fpath)
     
-    # Update embed cache for changed files
+    # Update embed cache + knowledge graph for changed files
     if processed_files:
         update_embed_cache(processed_files, cfg, debug)
+        try:
+            graph_stats = update_graph_incremental(processed_files, cfg, debug)
+            if graph_stats and debug:
+                print(f"🔗 Graph updated: {graph_stats.get('total_entities', 0)} entities", file=sys.stderr)
+        except Exception as e:
+            if debug:
+                print(f"⚠ Graph update skipped: {e}", file=sys.stderr)
     
     return {"files_processed": len(processed_files), "facts_stored": total_stored}
 
@@ -320,6 +328,10 @@ def _watch_fswatch(watch_paths, cfg, state, state_path, agent, debug):
                 if stored > 0:
                     print(f"   💾 {stored} facts → agentMemory", file=sys.stderr)
                 update_embed_cache([fp], cfg, debug)
+                try:
+                    update_graph_incremental([fp], cfg, debug)
+                except Exception:
+                    pass
                 save_state(state, state_path)
 
 
@@ -367,6 +379,10 @@ def _watch_polling(watch_paths, cfg, state, state_path, agent, debug, interval=3
             update_embed_cache([fp], cfg, debug)
         
         if changed:
+            try:
+                update_graph_incremental(changed, cfg, debug)
+            except Exception:
+                pass
             save_state(state, state_path)
 
 

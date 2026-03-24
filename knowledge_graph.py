@@ -176,6 +176,69 @@ def build_graph(workspace: str | None = None, rebuild: bool = False,
     return graph
 
 
+def update_graph_incremental(changed_files: list[str], cfg: dict = None, debug: bool = False) -> dict | None:
+    """Update knowledge graph with only the changed files. Called by auto_ingest.
+    Returns updated graph stats or None if no graph/LLM available."""
+    if cfg is None:
+        cfg = load_config(script="graph")
+    else:
+        # Apply graph script overrides
+        graph_cfg = load_config(script="graph")
+        cfg = {**cfg, "llm": graph_cfg.get("llm", cfg.get("llm", {}))}
+    
+    ws = cfg.get("paths", {}).get("workspace", ".")
+    graph_path = os.path.join(ws, cfg["paths"].get("knowledgeGraph", ".cache/knowledge-graph.json"))
+    
+    # Load existing graph
+    graph = {"entities": {}, "stats": {"total_entities": 0, "total_relations": 0}, "sources": {}}
+    if os.path.isfile(graph_path):
+        try:
+            with open(graph_path) as f:
+                graph = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    
+    # Filter to .md files that exist
+    md_files = [f for f in changed_files if f.endswith(".md") and os.path.isfile(f)]
+    if not md_files:
+        return None
+    
+    updated = 0
+    for filepath in md_files:
+        try:
+            with open(filepath) as f:
+                content = f.read()
+        except OSError:
+            continue
+        
+        if len(content.strip()) < 100:
+            continue
+        
+        # Truncate for LLM
+        content = content[:3000]
+        
+        if debug:
+            print(f"  🔗 Graph update: {os.path.basename(filepath)}...", file=sys.stderr)
+        
+        entities = extract_entities(filepath, content, cfg, debug)
+        if entities:
+            graph = merge_entities(graph, entities, filepath)
+            updated += 1
+    
+    if updated > 0:
+        # Save
+        os.makedirs(os.path.dirname(graph_path), exist_ok=True)
+        with open(graph_path, "w") as f:
+            json.dump(graph, f, ensure_ascii=False, indent=2)
+        
+        stats = graph.get("stats", {})
+        if debug:
+            print(f"  🔗 Graph: {stats.get('total_entities', 0)} entities, {stats.get('total_relations', 0)} relations", file=sys.stderr)
+        return stats
+    
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build knowledge graph from workspace")
     parser.add_argument("--rebuild", action="store_true", help="Full rebuild (ignore cache)")
