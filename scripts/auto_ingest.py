@@ -28,7 +28,7 @@ from knowledge_graph import update_graph_incremental
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-WATCH_DIRS = ["memory", "agents", "projects", "modules-bureau", "infra", "bugs", "echanges"]
+WATCH_DIRS = ["memory", "agents", "projects", "docs", "notes"]  # customize for your workspace
 IGNORE_PATTERNS = [".cache", "__pycache__", "node_modules", ".git", "brain/references"]
 MIN_FILE_SIZE = 50  # bytes — skip near-empty files
 MAX_FILE_SIZE = 50_000  # bytes — skip huge files (process in chunks later)
@@ -92,7 +92,7 @@ def should_process(filepath: str, state: dict) -> bool:
     return True
 
 
-def ingest_file(filepath: str, cfg: dict, state: dict, agent: str = "koda",
+def ingest_file(filepath: str, cfg: dict, state: dict, agent: str = "default",
                 debug: bool = False) -> int:
     """Process a single file: extract facts → store to agentMemory."""
     try:
@@ -219,7 +219,7 @@ def update_embed_cache(changed_files: list[str], cfg: dict, debug: bool = False)
             print(f"  📦 Embed cache updated: +{len(new_chunks)} chunks ({len(chunks)} total)", file=sys.stderr)
 
 
-def scan_workspace(cfg: dict, state: dict, agent: str = "koda",
+def scan_workspace(cfg: dict, state: dict, agent: str = "default",
                    debug: bool = False, max_files: int = 10) -> dict:
     """Scan workspace for recently modified .md files and ingest them."""
     ws = cfg.get("paths", {}).get("workspace", ".")
@@ -273,7 +273,7 @@ def scan_workspace(cfg: dict, state: dict, agent: str = "koda",
     return {"files_processed": len(processed_files), "facts_stored": total_stored}
 
 
-def watch_loop(cfg: dict, state: dict, state_path: str, agent: str = "koda",
+def watch_loop(cfg: dict, state: dict, state_path: str, agent: str = "default",
                debug: bool = False):
     """Continuous file watcher. Uses fswatch on macOS, polling fallback everywhere else."""
     ws = cfg.get("paths", {}).get("workspace", ".")
@@ -386,7 +386,7 @@ def _watch_polling(watch_paths, cfg, state, state_path, agent, debug, interval=3
             save_state(state, state_path)
 
 
-def ingest_post_compaction(text: str, cfg: dict, agent: str = "koda",
+def ingest_post_compaction(text: str, cfg: dict, agent: str = "default",
                            debug: bool = False) -> int:
     """Extract facts from LCM compaction summary text."""
     if debug:
@@ -409,7 +409,7 @@ def main():
     parser.add_argument("--file", help="Ingest a single file")
     parser.add_argument("--post-compaction", help="Extract from LCM compaction text (use - for stdin)")
     parser.add_argument("--max-files", type=int, default=10, help="Max files per scan (default 10)")
-    parser.add_argument("--agent", default="koda", help="Agent name")
+    parser.add_argument("--agent", default="default", help="Agent name")
     parser.add_argument("--preset", help="Config preset")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()

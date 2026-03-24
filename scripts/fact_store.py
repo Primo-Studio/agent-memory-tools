@@ -243,7 +243,7 @@ class FactStore:
         self.backend = "convex" if self.use_convex else "local"
         self._convex_url = cfg.get("convexUrl", "") if self.use_convex else ""
     
-    def store(self, fact: str, category: str = "savoir", agent: str = "koda",
+    def store(self, fact: str, category: str = "knowledge", agent: str = "default",
               confidence: float = 0.8, source: str = "extract_facts") -> dict:
         if self.use_convex:
             return _convex_store(fact, category, agent, confidence, source, self._convex_url)

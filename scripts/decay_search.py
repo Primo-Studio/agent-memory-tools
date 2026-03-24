@@ -131,7 +131,7 @@ def search_with_decay(query: str, limit: int = 10, half_life: float = 14,
     if cfg is None:
         cfg = load_config()
     
-    protected = cfg["search"].get("protectedCategories", ["savoir", "erreur"])
+    protected = cfg["search"].get("protectedCategories", ["knowledge", "error"])
     # Map to file categories
     protected_cats = ["permanent"]  # savoir/erreur files are classified as permanent
     

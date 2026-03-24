@@ -1,8 +1,9 @@
 {
   "llm": {
-    "provider": "lmstudio",
-    "baseUrl": "http://localhost:1234/v1",
-    "model": "qwen/qwen3.5-35b-a3b",
+    "provider": "ollama",
+    "baseUrl": "http://localhost:11434",
+    "model": "gemma3:4b",
+    "apiFormat": "ollama",
     "temperature": 0.1,
     "maxTokens": 2048,
     "timeoutSeconds": 120
@@ -32,40 +33,16 @@
     "confidenceThreshold": 0.6,
     "decayHalfLifeDays": 14,
     "protectedCategories": [
-      "savoir",
-      "erreur"
+      "knowledge",
+      "error"
     ]
   },
   "scriptOverrides": {
-    "multihop": {
-      "llm": {
-        "model": "qwen/qwen3.5-35b-a3b"
-      }
-    },
-    "extract": {
-      "llm": {
-        "baseUrl": "http://localhost:11434",
-        "model": "gemma3:4b",
-        "apiFormat": "ollama",
-        "maxTokens": 2048,
-        "timeoutSeconds": 90
-      }
-    },
-    "recall": {
-      "llm": {
-        "baseUrl": "http://localhost:11434",
-        "model": "gemma3:4b",
-        "apiFormat": "ollama",
-        "maxTokens": 1024,
-        "timeoutSeconds": 60
-      }
-    },
+    "multihop": {},
+    "extract": {},
+    "recall": {},
     "decay": {},
-    "graph": {
-      "llm": {
-        "model": "qwen/qwen3.5-35b-a3b"
-      }
-    }
+    "graph": {}
   },
   "presets": {
     "ollama": {

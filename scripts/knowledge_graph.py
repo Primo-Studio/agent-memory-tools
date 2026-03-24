@@ -36,7 +36,7 @@ Rules:
 - Only extract clearly named entities (people, tools, projects, machines, companies)
 - Max 5 entities per document
 - Only extract relationships explicitly stated in the text
-- Use existing entity names when possible (Koda, Sol, Luna, Neto, Bureau, Primask, etc.)"""
+- Use existing entity names when possible — reuse names already in the graph"""
 
 
 def scan_files(workspace: str, skip: list[str] | None = None) -> list[str]:

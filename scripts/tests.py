@@ -99,7 +99,7 @@ class TestExtractFacts(unittest.TestCase):
     
     def test_categories(self):
         from extract_facts import EXTRACTION_PROMPT
-        for cat in ["savoir", "erreur", "chronologie", "preference", "outil", "client", "rh"]:
+        for cat in ["knowledge", "error", "timeline", "preference", "tool", "client", "hr"]:
             self.assertIn(cat, EXTRACTION_PROMPT)
 
 

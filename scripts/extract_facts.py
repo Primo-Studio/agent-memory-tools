@@ -87,7 +87,7 @@ def _check_contradiction_local(fact: dict, store: FactStore, cfg: dict, debug: b
     """Check if a fact contradicts existing facts using local LLM (0€).
     Works with both Convex and local JSON backends."""
     try:
-        candidates = store.search(fact["fact"], category=fact.get("category", "savoir"), limit=5)
+        candidates = store.search(fact["fact"], category=fact.get("category", "knowledge"), limit=5)
         if not candidates:
             return None
 
@@ -116,7 +116,7 @@ def _check_contradiction_local(fact: dict, store: FactStore, cfg: dict, debug: b
     return None
 
 
-def store_facts(facts: list[dict], agent: str = "koda", debug: bool = False,
+def store_facts(facts: list[dict], agent: str = "default", debug: bool = False,
                 check_contradictions: bool = True, cfg: dict = None) -> int:
     """Store facts via FactStore (auto-selects Convex or local JSON).
     Runs local contradiction check (gemma3, 0€). Returns count stored."""
@@ -141,7 +141,7 @@ def store_facts(facts: list[dict], agent: str = "koda", debug: bool = False,
 
         result = store.store(
             fact=f["fact"],
-            category=f.get("category", "savoir"),
+            category=f.get("category", "knowledge"),
             agent=agent,
             confidence=f.get("confidence", 0.8),
             source="extract_facts"
@@ -174,7 +174,7 @@ def main():
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--preset", help="Config preset")
     parser.add_argument("--store", action="store_true", help="Store facts to agentMemory (Convex)")
-    parser.add_argument("--agent", default="koda", help="Agent name for agentMemory")
+    parser.add_argument("--agent", default="default", help="Agent name for agentMemory")
     args = parser.parse_args()
     
     cfg = load_config(preset=args.preset, script="extract")

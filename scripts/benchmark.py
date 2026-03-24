@@ -48,7 +48,7 @@ TEST_FILES = {
     "agents/sol.md": """# Sol — Mac Mini M4 Pro
 - Role: Local dev agent, runs overnight builds and tests
 - Status: PAUSED since March 13 (was looping without coding)
-- Gateway: 127.0.0.1:18789, OpenClaw v2026.3.22
+- Gateway: 127.0.0.1:18789
 - Models: Qwen 3.5 35B (MLX), gemma3:4b (Ollama)
 - Workspace: ~/openclaw-workspace
 """,
