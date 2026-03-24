@@ -2,18 +2,31 @@
 
 Multi-source persistent memory for AI agents. Runs 100% local via [Ollama](https://ollama.com) — no API keys, no cloud dependency, zero cost.
 
-## What it does
+## How it works
 
-Searches, stores, and manages agent memory across **4 sources** in parallel:
+```
+Question
+  │
+  ▼
+unified_recall.py ──── fan-out (parallel) ────┐
+  │                                            │
+  ├─→ Fact store     (extracted facts, dedup)  │
+  ├─→ Embeddings     (semantic search, nomic)  │
+  ├─→ BM25           (keyword match, QMD)      │
+  └─→ Knowledge graph (entity traversal)       │
+                                               ▼
+                                         Merge + Dedup
+                                               │
+                                         Multi-signal Score
+                                         (relevance × recency × source weight)
+                                               │
+                                         LLM Rerank (gemma3)
+                                               │
+                                         Synthesize answer
+                                         with source citations
+```
 
-| Source | What it provides |
-|--------|-----------------|
-| **Fact store** | Extracted facts with dedup + contradiction detection |
-| **Vector embeddings** | Semantic similarity search (nomic) |
-| **BM25 full-text** | Keyword matching via QMD |
-| **Knowledge graph** | Entity/relationship traversal |
-
-Results are merged, scored with multi-signal ranking, reranked by LLM, and synthesized into a sourced answer.
+Each layer adds a different recall strength — embeddings catch semantic similarity, BM25 catches exact terms, the graph catches relationships, and the fact store catches previously validated knowledge. Together they cover blind spots that any single method would miss.
 
 ## Quick start
 
