@@ -37,11 +37,35 @@
     ]
   },
   "scriptOverrides": {
-    "multihop": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } },
-    "extract": { "llm": { "baseUrl": "http://localhost:11434", "model": "gemma3:4b", "apiFormat": "ollama", "maxTokens": 2048, "timeoutSeconds": 90 } },
-    "recall": { "llm": { "baseUrl": "http://localhost:11434", "model": "gemma3:4b", "apiFormat": "ollama", "maxTokens": 1024, "timeoutSeconds": 60 } },
+    "multihop": {
+      "llm": {
+        "model": "qwen/qwen3.5-35b-a3b"
+      }
+    },
+    "extract": {
+      "llm": {
+        "baseUrl": "http://localhost:11434",
+        "model": "gemma3:4b",
+        "apiFormat": "ollama",
+        "maxTokens": 2048,
+        "timeoutSeconds": 90
+      }
+    },
+    "recall": {
+      "llm": {
+        "baseUrl": "http://localhost:11434",
+        "model": "gemma3:4b",
+        "apiFormat": "ollama",
+        "maxTokens": 1024,
+        "timeoutSeconds": 60
+      }
+    },
     "decay": {},
-    "graph": { "llm": { "model": "qwen/qwen3.5-35b-a3b" } }
+    "graph": {
+      "llm": {
+        "model": "qwen/qwen3.5-35b-a3b"
+      }
+    }
   },
   "presets": {
     "ollama": {
@@ -137,5 +161,6 @@
       "embed": "text-embedding-3-large (OpenAI)",
       "notes": "Best quality, higher cost (~$3-15/1M tokens)"
     }
-  }
+  },
+  "convexUrl": "https://notable-dragon-607.convex.cloud"
 }

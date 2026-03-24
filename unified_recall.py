@@ -23,11 +23,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from llm_client import load_config, call_llm_json, call_llm, embed, cosine_sim
+from fact_store import FactStore
 
 
 # === Source weights ===
 SOURCE_TRUST = {
-    "convex": 1.0,      # agentMemory = source of truth
+    "convex": 1.0,      # agentMemory / local facts = source of truth
     "embed": 0.8,       # semantic similarity
     "qmd": 0.6,         # BM25 text match
     "graph": 0.5,       # entity relations
@@ -42,33 +43,26 @@ SCORE_WEIGHTS = {
     "graph": 0.10,       # w6: graph centrality
 }
 
-CONVEX_URL = "https://notable-dragon-607.convex.cloud/api/query"
+# =====================================================================
+# Source 1: agentMemory (Convex) or local JSON (auto-detected)
+# =====================================================================
+_fact_store_instance = None
+
+def _get_fact_store(cfg: dict = None) -> FactStore:
+    global _fact_store_instance
+    if _fact_store_instance is None:
+        _fact_store_instance = FactStore(cfg)
+    return _fact_store_instance
 
 
-# =====================================================================
-# Source 1: agentMemory (Convex)
-# =====================================================================
-def search_convex(query: str, debug: bool = False) -> list[dict]:
-    """Search agentMemory via Convex API."""
+def search_convex(query: str, debug: bool = False, cfg: dict = None) -> list[dict]:
+    """Search facts via FactStore (Convex or local JSON)."""
     try:
-        payload = json.dumps({
-            "path": "agentMemory:search",
-            "args": {"query": query}
-        })
-        result = subprocess.run(
-            ["curl", "-s", "--max-time", "10", "-X", "POST", CONVEX_URL,
-             "-H", "Content-Type: application/json", "-d", payload],
-            capture_output=True, text=True, timeout=15
-        )
-        data = json.loads(result.stdout)
-        
-        if data.get("status") != "success":
-            if debug:
-                print(f"  Convex error: {data}", file=sys.stderr)
-            return []
+        store = _get_fact_store(cfg)
+        items = store.search(query, limit=10)
         
         results = []
-        for item in data.get("value", []):
+        for item in items:
             results.append({
                 "id": item.get("_id", ""),
                 "text": item.get("fact", ""),
@@ -82,11 +76,11 @@ def search_convex(query: str, debug: bool = False) -> list[dict]:
             })
         
         if debug:
-            print(f"  Convex: {len(results)} results", file=sys.stderr)
+            print(f"  Facts ({store.backend}): {len(results)} results", file=sys.stderr)
         return results
     except Exception as e:
         if debug:
-            print(f"  Convex exception: {e}", file=sys.stderr)
+            print(f"  Facts exception: {e}", file=sys.stderr)
         return []
 
 

@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from llm_client import load_config, call_llm_json
+from fact_store import FactStore
 
 
 EXTRACTION_PROMPT = """You are a fact extractor. You receive text from conversations or documents.
@@ -61,9 +62,6 @@ def extract(text: str, cfg: dict | None = None, debug: bool = False) -> list[dic
     return []
 
 
-CONVEX_URL = "https://notable-dragon-607.convex.cloud/api/mutation"
-CONVEX_QUERY_URL = "https://notable-dragon-607.convex.cloud/api/query"
-
 CONTRADICTION_PROMPT = """New fact: "{new_fact}"
 
 Existing facts in the same category:
@@ -85,32 +83,19 @@ Reply ONLY with valid JSON:
 {{"contradicts": <number 1-{count} or null>, "reason": "<short explanation>"}}"""
 
 
-def _check_contradiction_local(fact: dict, cfg: dict, debug: bool = False) -> dict | None:
-    """Check if a fact contradicts existing agentMemory facts using local LLM (0€).
-    Returns {"contradicts_id": id, "contradicts_fact": text, "reason": str} or None."""
+def _check_contradiction_local(fact: dict, store: FactStore, cfg: dict, debug: bool = False) -> dict | None:
+    """Check if a fact contradicts existing facts using local LLM (0€).
+    Works with both Convex and local JSON backends."""
     try:
-        # Search similar facts in Convex
-        payload = json.dumps({
-            "path": "agentMemory:search",
-            "args": {"query": fact["fact"], "category": fact.get("category", "savoir"), "limit": 5}
-        })
-        result = subprocess.run(
-            ["curl", "-s", "-X", "POST", CONVEX_QUERY_URL,
-             "-H", "Content-Type: application/json", "-d", payload],
-            capture_output=True, text=True, timeout=15
-        )
-        data = json.loads(result.stdout)
-        candidates = data.get("value", [])
+        candidates = store.search(fact["fact"], category=fact.get("category", "savoir"), limit=5)
         if not candidates:
             return None
 
-        # Build prompt
         existing = "\n".join(f'{i+1}. "{c["fact"]}"' for i, c in enumerate(candidates))
         prompt = CONTRADICTION_PROMPT.format(
             new_fact=fact["fact"], existing_facts=existing, count=len(candidates)
         )
 
-        # Call local LLM
         check = call_llm_json(prompt, cfg, debug)
         if check and check.get("contradicts") is not None:
             idx = check["contradicts"]
@@ -131,61 +116,53 @@ def _check_contradiction_local(fact: dict, cfg: dict, debug: bool = False) -> di
     return None
 
 
-def store_to_convex(facts: list[dict], agent: str = "koda", debug: bool = False,
-                    check_contradictions: bool = True, cfg: dict = None) -> int:
-    """Store facts to agentMemory (Convex). Runs local contradiction check (gemma3, 0€).
-    Returns count stored."""
+def store_facts(facts: list[dict], agent: str = "koda", debug: bool = False,
+                check_contradictions: bool = True, cfg: dict = None) -> int:
+    """Store facts via FactStore (auto-selects Convex or local JSON).
+    Runs local contradiction check (gemma3, 0€). Returns count stored."""
     stored = 0
     contradictions = 0
     skipped_facts = []
 
-    if check_contradictions and cfg is None:
+    if cfg is None:
         cfg = load_config(script="extract")
 
+    store = FactStore(cfg)
+    if debug:
+        print(f"  Backend: {store.backend}", file=sys.stderr)
+
     for f in facts:
-        # Local contradiction check before storing
-        if check_contradictions and cfg:
-            conflict = _check_contradiction_local(f, cfg, debug)
+        if check_contradictions:
+            conflict = _check_contradiction_local(f, store, cfg, debug)
             if conflict:
                 contradictions += 1
                 skipped_facts.append({"fact": f["fact"], "conflict": conflict})
-                continue  # Don't store contradicting facts
+                continue
 
-        # Store via simple agentMemory:store (Convex dedup handles the rest)
-        payload = json.dumps({
-            "path": "agentMemory:store",
-            "args": {
-                "fact": f["fact"],
-                "category": f.get("category", "savoir"),
-                "agent": agent,
-                "confidence": f.get("confidence", 0.8),
-                "source": "extract_facts"
-            }
-        })
-        try:
-            result = subprocess.run(
-                ["curl", "-s", "-X", "POST", CONVEX_URL,
-                 "-H", "Content-Type: application/json", "-d", payload],
-                capture_output=True, text=True, timeout=15
-            )
-            data = json.loads(result.stdout)
-            if data.get("status") == "success":
-                stored += 1
-                if debug:
-                    action = data.get("value", {}).get("action", "?")
-                    print(f"  → Stored ({action}): {f['fact'][:60]}", file=sys.stderr)
-            elif debug:
-                print(f"  → Failed: {result.stdout[:100]}", file=sys.stderr)
-        except Exception as e:
+        result = store.store(
+            fact=f["fact"],
+            category=f.get("category", "savoir"),
+            agent=agent,
+            confidence=f.get("confidence", 0.8),
+            source="extract_facts"
+        )
+        action = result.get("action", "?")
+        if action in ("created", "updated"):
+            stored += 1
             if debug:
-                print(f"  → Error: {e}", file=sys.stderr)
+                print(f"  → Stored ({action}): {f['fact'][:60]}", file=sys.stderr)
+        elif debug:
+            print(f"  → Failed: {result}", file=sys.stderr)
 
-    if contradictions > 0:
-        if debug:
-            print(f"  ⚠ {contradictions} contradictions blocked, {stored} stored", file=sys.stderr)
-            for sf in skipped_facts:
-                print(f"    Skipped: {sf['fact'][:50]} (vs {sf['conflict']['contradicts_fact'][:50]})", file=sys.stderr)
+    if contradictions > 0 and debug:
+        print(f"  ⚠ {contradictions} contradictions blocked, {stored} stored", file=sys.stderr)
+        for sf in skipped_facts:
+            print(f"    Skipped: {sf['fact'][:50]} (vs {sf['conflict']['contradicts_fact'][:50]})", file=sys.stderr)
     return stored
+
+
+# Backward compat alias
+store_to_convex = store_facts
 
 
 def main():
