@@ -7,8 +7,10 @@ Usage:
     knowledge_graph [--rebuild] [--dry-run] [--debug]
 """
 from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
+import os, sys
+# Cross-platform PATH setup
+if sys.platform == "darwin":
+    os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 
 import argparse, glob, json, sys, time
 from pathlib import Path

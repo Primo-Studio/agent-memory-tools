@@ -4,22 +4,26 @@ Unified LLM + Embedding client for agent-memory-tools.
 Reads config.json, supports LM Studio, Ollama, and OpenAI-compatible APIs.
 """
 from __future__ import annotations
-import json, os, subprocess, sys, re
+import json, os, platform, subprocess, sys, re
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
+IS_WINDOWS = platform.system() == "Windows"
+IS_MAC = platform.system() == "Darwin"
 
 def load_config(preset: str | None = None, script: str | None = None) -> dict:
     """Load config.json, optionally applying a preset overlay."""
     with open(CONFIG_PATH) as f:
         cfg = json.load(f)
     
-    # Override workspace if not set
-    if not cfg["paths"]["workspace"]:
-        cfg["paths"]["workspace"] = os.environ.get(
+    # Auto-detect workspace: env var > config > skill parent dir
+    ws = cfg.get("paths", {}).get("workspace", "")
+    if not ws or not os.path.isdir(ws):
+        ws = os.environ.get(
             "MEMORY_WORKSPACE",
             str(Path(__file__).resolve().parents[2])  # skill parent
         )
+    cfg.setdefault("paths", {})["workspace"] = ws
     
     # Apply preset if requested
     if preset and preset in cfg.get("presets", {}):

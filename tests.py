@@ -5,10 +5,12 @@ Run: python3 scripts/tests.py
 No pytest needed — uses unittest.
 """
 from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
+import os, sys
+# Cross-platform PATH setup
+if sys.platform == "darwin":
+    os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 
-import json, sys, unittest
+import json, unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))

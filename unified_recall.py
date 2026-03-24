@@ -11,10 +11,12 @@ Usage:
     unified_recall.py "question" --no-llm    # scoring only, no synthesis
 """
 from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
+import os, sys
+# Cross-platform PATH setup
+if sys.platform == "darwin":
+    os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 
-import argparse, json, math, re, subprocess, sys, time
+import argparse, json, math, re, subprocess, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path

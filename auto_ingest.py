@@ -11,10 +11,12 @@ Modes:
 Designed to run as a LaunchAgent or cron job.
 """
 from __future__ import annotations
-import os
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
+import os, sys
+# Cross-platform PATH setup
+if sys.platform == "darwin":
+    os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("HOME", "") + "/.bun/bin:" + os.environ.get("PATH", "")
 
-import argparse, json, hashlib, subprocess, sys, time
+import argparse, json, hashlib, subprocess, time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -265,7 +267,7 @@ def scan_workspace(cfg: dict, state: dict, agent: str = "koda",
 
 def watch_loop(cfg: dict, state: dict, state_path: str, agent: str = "koda",
                debug: bool = False):
-    """Continuous fswatch-based watcher."""
+    """Continuous file watcher. Uses fswatch on macOS, polling fallback everywhere else."""
     ws = cfg.get("paths", {}).get("workspace", ".")
     watch_paths = [os.path.join(ws, d) for d in WATCH_DIRS if os.path.isdir(os.path.join(ws, d))]
     
@@ -273,44 +275,99 @@ def watch_loop(cfg: dict, state: dict, state_path: str, agent: str = "koda",
         print("❌ No watch directories found", file=sys.stderr)
         return
     
+    print(f"👁 Watching {len(watch_paths)} dirs for .md changes...", file=sys.stderr)
+    
+    # Try fswatch (macOS), fall back to polling
+    use_fswatch = False
+    if sys.platform == "darwin":
+        try:
+            subprocess.run(["which", "fswatch"], capture_output=True, check=True)
+            use_fswatch = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    
+    if use_fswatch:
+        _watch_fswatch(watch_paths, cfg, state, state_path, agent, debug)
+    else:
+        _watch_polling(watch_paths, cfg, state, state_path, agent, debug)
+
+
+def _watch_fswatch(watch_paths, cfg, state, state_path, agent, debug):
+    """macOS fswatch watcher."""
     cmd = ["fswatch", "-r", "--event", "Updated", "--event", "Created",
            "-e", r"\.cache", "-e", r"__pycache__", "-e", r"\.git",
            "-i", r"\.md$"] + watch_paths
     
-    print(f"👁 Watching {len(watch_paths)} dirs for .md changes...", file=sys.stderr)
-    
-    try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
-    except FileNotFoundError:
-        print("❌ fswatch not installed. Use: brew install fswatch", file=sys.stderr)
-        return
-    
-    pending = {}  # filepath → first_seen_time (for debounce)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+    pending = {}
     
     while True:
         line = proc.stdout.readline()
         if not line:
             break
-        
         filepath = line.strip()
         if not filepath.endswith(".md"):
             continue
-        
         now = time.time()
         if filepath not in pending:
             pending[filepath] = now
-        
-        # Process debounced files
         ready = [fp for fp, t in pending.items() if now - t >= DEBOUNCE_SECONDS]
         for fp in ready:
             del pending[fp]
             if should_process(fp, state):
-                print(f"\n🔔 Change detected: {os.path.basename(fp)}", file=sys.stderr)
+                print(f"\n🔔 Change: {os.path.basename(fp)}", file=sys.stderr)
                 stored = ingest_file(fp, cfg, state, agent, debug)
                 if stored > 0:
                     print(f"   💾 {stored} facts → agentMemory", file=sys.stderr)
                 update_embed_cache([fp], cfg, debug)
                 save_state(state, state_path)
+
+
+def _watch_polling(watch_paths, cfg, state, state_path, agent, debug, interval=30):
+    """Cross-platform polling watcher (works on Windows/Linux/macOS)."""
+    print(f"  Using polling mode (every {interval}s)", file=sys.stderr)
+    known_mtimes = {}
+    
+    # Initial snapshot
+    for wp in watch_paths:
+        for root, dirs, files in os.walk(wp):
+            dirs[:] = [d for d in dirs if d not in [".cache", "__pycache__", ".git"]]
+            for f in files:
+                if f.endswith(".md"):
+                    fp = os.path.join(root, f)
+                    try:
+                        known_mtimes[fp] = os.path.getmtime(fp)
+                    except OSError:
+                        pass
+    
+    while True:
+        time.sleep(interval)
+        changed = []
+        for wp in watch_paths:
+            for root, dirs, files in os.walk(wp):
+                dirs[:] = [d for d in dirs if d not in [".cache", "__pycache__", ".git"]]
+                for f in files:
+                    if not f.endswith(".md"):
+                        continue
+                    fp = os.path.join(root, f)
+                    try:
+                        mtime = os.path.getmtime(fp)
+                    except OSError:
+                        continue
+                    if fp not in known_mtimes or mtime > known_mtimes[fp]:
+                        known_mtimes[fp] = mtime
+                        if should_process(fp, state):
+                            changed.append(fp)
+        
+        for fp in changed:
+            print(f"\n🔔 Change: {os.path.basename(fp)}", file=sys.stderr)
+            stored = ingest_file(fp, cfg, state, agent, debug)
+            if stored > 0:
+                print(f"   💾 {stored} facts → agentMemory", file=sys.stderr)
+            update_embed_cache([fp], cfg, debug)
+        
+        if changed:
+            save_state(state, state_path)
 
 
 def ingest_post_compaction(text: str, cfg: dict, agent: str = "koda",
