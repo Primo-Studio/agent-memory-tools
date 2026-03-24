@@ -1,6 +1,5 @@
 ---
 name: agent-memory-tools
-version: 2.8.0
 description: Searches, stores, and manages agent memory across 4 sources (fact store, vector embeddings, BM25, knowledge graph). Runs 100% local via Ollama — no API keys, no cloud dependency. Use when searching workspace knowledge, extracting facts from text, detecting contradictions, auto-ingesting file changes, or building entity graphs. Triggers on memory recall, fact extraction, knowledge search, workspace indexing.
 ---
 
@@ -62,7 +61,7 @@ python3 scripts/extract_facts.py --file path/to/doc.md --store
 cat summary.md | python3 scripts/extract_facts.py --store
 ```
 
-Facts are checked for contradictions locally (gemma3, ~2s) before storage. Categories: `savoir`, `erreur`, `chronologie`, `preference`, `outil`, `client`, `rh`.
+Facts are checked for contradictions locally (gemma3, ~2s) before storage. Categories: `knowledge`, `error`, `timeline`, `preference`, `tool`, `client`, `hr`.
 
 ### Auto-ingest workspace changes
 
