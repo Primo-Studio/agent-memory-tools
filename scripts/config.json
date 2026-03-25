@@ -72,7 +72,7 @@
     "lmstudio": {
       "llm": {
         "baseUrl": "http://localhost:1234/v1",
-        "model": "auto",
+        "model": "openai/gpt-oss-20b",
         "apiFormat": "openai"
       },
       "embeddings": {
