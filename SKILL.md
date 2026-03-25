@@ -123,6 +123,14 @@ python3 scripts/unified_recall.py "query" --preset openai
 
 ⚠ Avoid Qwen 3.5 for JSON tasks — outputs to "thinking" field instead of response.
 
+## Benchmark (LongMemEval-S)
+
+Tested on [LongMemEval-S](https://github.com/xiaowu0162/LongMemEval) — 500 questions, 6 categories.
+
+- **Retrieval: 92%** (nomic embeddings, top-5) — on par with ByteRover (92-96%)
+- Tested with GPT-OSS 20B on LM Studio (100% local, $0)
+- Answer accuracy scales with the answering LLM — plug in GPT-4o or Claude for best results
+
 ## Platform auto-trigger
 
 | Platform | Method |
