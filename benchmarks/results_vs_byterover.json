@@ -1,0 +1,147 @@
+{
+  "config": {
+    "sessions": 20,
+    "questions": 10,
+    "seed": 42,
+    "model": "openai/gpt-oss-20b"
+  },
+  "byterover": {
+    "ingest_time": 2297.28133893013,
+    "retrieval_pct": 50.0,
+    "accuracy_pct": 0.0,
+    "results": [
+      {
+        "q": "How many projects have I led or am currently leading?",
+        "error": "Command '['brv', 'query', 'How many projects have I led or am currently leading?']' timed out after 60 seconds"
+      },
+      {
+        "q": "What did I buy for my sister's birthday gift?",
+        "gold": "a yellow dress",
+        "answer": "**Summary:**  \nThis topic is not covered in the knowledge base.\n\n**Details:** The curated content does not contain any information about projects that you have led or are currently leading.\n\n**Sources",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "What was the date on which I attended the first BBQ event in June?",
+        "gold": "June 3rd",
+        "answer": "Thinking...\n  \u2713 CodeExec\n  Thinking...\n\n**Summary:**  \nThe knowledge base does not contain any record of a BBQ event in June, so the date cannot be determined from the available curated content.\n\n**De",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How many times did I ride rollercoasters across all the events I attended from J",
+        "gold": "10 times",
+        "answer": "**Summary**: Found 2 relevant topics for \"How many times did I ride rollercoasters across all the events I attended from July to October?\":\n\n**Details**:\n\n### streaming_laptop_to_smart_tv\n\n---\ntitle: ",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How long did I wait for the decision on my asylum application?",
+        "error": "Command '['brv', 'query', 'How long did I wait for the decision on my asylum application?']' timed out after 60 seconds"
+      },
+      {
+        "q": "How many engineers do I lead when I just started my new role as Senior Software ",
+        "error": "Command '['brv', 'query', 'How many engineers do I lead when I just started my new role as Senior Software Engineer? How many engineers do I lead now?']' timed out after 60 seconds"
+      },
+      {
+        "q": "How much money did I raise for charity in total?",
+        "error": "Command '['brv', 'query', 'How much money did I raise for charity in total?']' timed out after 60 seconds"
+      },
+      {
+        "q": "How many skeins of worsted weight yarn did I find in my stash?",
+        "error": "Command '['brv', 'query', 'How many skeins of worsted weight yarn did I find in my stash?']' timed out after 60 seconds"
+      },
+      {
+        "q": "I've been struggling with my slow cooker recipes. Any advice on getting better r",
+        "gold": "The user would prefer responses that provide tips and advice specifically tailor",
+        "answer": "\u2717 llm_map\n\nExecution timed out. Please try a simpler task or increase the timeout.\n\n**Summary:**  \nThis topic is not covered in the knowledge base.\n\n**Details:**  \nNo curated context or facts mention ",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How long did it take me to assemble the IKEA bookshelf?",
+        "gold": "4 hours",
+        "answer": "**Summary**: Found 3 relevant topics for \"How long did it take me to assemble the IKEA bookshelf?\":\n\n**Details**:\n\n### Topic: bookshelf\n\n# Topic: bookshelf\n\n## Overview\nStrategies for arranging books ",
+        "correct": false,
+        "retrieval": true
+      }
+    ]
+  },
+  "amt": {
+    "ingest_time": 290.9113049507141,
+    "retrieval_pct": 100.0,
+    "accuracy_pct": 0.0,
+    "results": [
+      {
+        "q": "How many projects have I led or am currently leading?",
+        "gold": "2",
+        "answer": "\ud83d\udce1 Sources: convex=5 embed=0 qmd=0 graph=0 \u2192 5 merged\n\u23f1  0.7s (fanout: 0.7s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "What did I buy for my sister's birthday gift?",
+        "gold": "a yellow dress",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=0 \u2192 0 merged\n\u23f1  0.6s (fanout: 0.6s)\n\n\u26a0 No results found.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "What was the date on which I attended the first BBQ event in June?",
+        "gold": "June 3rd",
+        "answer": "\ud83d\udce1 Sources: convex=3 embed=0 qmd=0 graph=16 \u2192 19 merged\n\u23f1  1.0s (fanout: 1.0s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How many times did I ride rollercoasters across all the events I attended from J",
+        "gold": "10 times",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=11 \u2192 11 merged\n\u23f1  1.1s (fanout: 1.1s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How long did I wait for the decision on my asylum application?",
+        "gold": "over a year",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=13 \u2192 13 merged\n\u23f1  0.7s (fanout: 0.7s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How many engineers do I lead when I just started my new role as Senior Software ",
+        "gold": "When you just started your new role as Senior Software Engineer, you led 4 engin",
+        "answer": "\ud83d\udce1 Sources: convex=1 embed=0 qmd=0 graph=0 \u2192 1 merged\n\u23f1  1.6s (fanout: 1.5s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How much money did I raise for charity in total?",
+        "gold": "$3,750",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=0 \u2192 0 merged\n\u23f1  0.8s (fanout: 0.8s)\n\n\u26a0 No results found.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How many skeins of worsted weight yarn did I find in my stash?",
+        "gold": "17",
+        "answer": "\ud83d\udce1 Sources: convex=1 embed=0 qmd=0 graph=0 \u2192 1 merged\n\u23f1  0.8s (fanout: 0.8s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "I've been struggling with my slow cooker recipes. Any advice on getting better r",
+        "gold": "The user would prefer responses that provide tips and advice specifically tailor",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=0 \u2192 0 merged\n\u23f1  0.3s (fanout: 0.3s)\n\n\u26a0 No results found.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      },
+      {
+        "q": "How long did it take me to assemble the IKEA bookshelf?",
+        "gold": "4 hours",
+        "answer": "\ud83d\udce1 Sources: convex=0 embed=0 qmd=0 graph=11 \u2192 11 merged\n\u23f1  0.4s (fanout: 0.3s)\n\n\u26a0 Synthesis failed.\n\n\ud83d\udcca Confidence: 0%",
+        "correct": false,
+        "retrieval": true
+      }
+    ]
+  }
+}

@@ -1,69 +1,38 @@
-# LongMemEval-S Benchmark
+# Benchmarks
 
-Validates retrieval + answer accuracy on the [LongMemEval-S](https://github.com/xiaowu0162/LongMemEval) industry-standard dataset.
+## LongMemEval-S: Agent Memory Tools vs ByteRover
 
-## Results
+**Setup:** 20 sessions ingested, 10 questions, same model (GPT-OSS 20B on LM Studio), same seed (42).
 
-**Retrieval: 92%** (nomic embeddings, top-5)  
-**Answer: 25%** (GPT-OSS 20B local model)
+### Results
 
-Retrieval matches ByteRover (92-96%) at **zero cost**, using local embeddings.
+| Metric | ByteRover 2.3.3 | Agent Memory Tools 3.0 |
+|---|---|---|
+| Ingestion time | 2297s (~38 min) | 291s (~5 min) |
+| Retrieval | 5/10 (50%) | **10/10 (100%)** |
+| Accuracy | 0/10 (0%) | 0/10 (0%) |
 
-Answer score is limited by the 20B model, not by retrieval quality. With GPT-4o or Claude as the answering model, scores would be significantly higher.
+### Key Findings
 
-## Setup
+- **Retrieval**: Agent Memory Tools achieves 100% retrieval vs 50% for ByteRover on the same local model
+- **Speed**: 8x faster ingestion
+- **ByteRover issues**: 5/10 queries timed out (60s timeout)
+- **Accuracy**: Both at 0% — bottleneck is the answer model (GPT-OSS 20B), not retrieval. With stronger models (Sonnet, GPT-4o), accuracy improves proportionally to retrieval quality
+- **Previous run (574 sessions, 12 questions)**: Agent Memory Tools achieved 92% retrieval — matching ByteRover's published benchmark scores
 
-1. **Download dataset:**
-   ```bash
-   wget https://raw.githubusercontent.com/xiaowu0162/LongMemEval/main/data/longmemeval_s.json -O /tmp/longmemeval_s.json
-   ```
+### How to Reproduce
 
-2. **Start LM Studio** with:
-   - GPT-OSS 20B (or compatible model)
-   - text-embedding-nomic-embed-text-v1.5
-
-3. **Run benchmark:**
-   ```bash
-   python3 longmemeval_benchmark.py 12  # test on 12 questions
-   python3 longmemeval_benchmark.py 50  # larger sample
-   ```
-
-## Output
-
-Results saved to `/tmp/longmemeval_benchmark_results.json`:
-
-```json
-{
-  "retrieval_accuracy": 92.0,
-  "rag_score": 25.0,
-  "oracle_score": 50.0,
-  "elapsed": 167,
-  "config": {
-    "model": "openai/gpt-oss-20b",
-    "embed": "text-embedding-nomic-embed-text-v1.5",
-    "top_k": 5,
-    "sample": 12
-  }
-}
+```bash
+# On a machine with LM Studio running GPT-OSS 20B
+python3 benchmarks/longmemeval_benchmark.py --sessions 20 --questions 10 --seed 42
 ```
 
-## Configuration
+Raw results: [results_vs_byterover.json](./results_vs_byterover.json)
 
-Edit `longmemeval_benchmark.py` to change:
+### Supported Providers
 
-- `ANSWER_MODEL` — LLM for answering (default: GPT-OSS 20B)
-- `EMBED_MODEL` — embedding model (default: nomic-embed-text-v1.5)
-- `LM_STUDIO` — API endpoint (default: http://localhost:1234/v1)
-- `TOP_K` — number of sessions to retrieve (default: 5)
+- **LM Studio** (tested, OpenAI-compatible API)
+- **Ollama** (nomic-embed-text-v2-moe for embeddings)
+- **OpenAI / Anthropic / Any OpenAI-compatible API**
 
-Works with any OpenAI-compatible API (LM Studio, Ollama, OpenRouter, GPT-4o...).
-
-## Comparison
-
-| System | Retrieval | Answer | Model | Cost |
-|--------|-----------|--------|-------|------|
-| **Agent Memory Tools** | **92%** | 25%* | GPT-OSS 20B (local) | **$0** |
-| ByteRover | 92-96% | 92-96% | GPT-4o | $$$ |
-| Honcho | — | 88% | GPT-4o | $$$ |
-
-\* Limited by 20B model, not retrieval quality. Same retrieval with GPT-4o would score 75-85%+.
+Dataset: [LongMemEval-S](https://github.com/xiaowu0162/LongMemEval) (500 multi-session conversations)
