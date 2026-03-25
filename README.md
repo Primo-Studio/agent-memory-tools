@@ -75,6 +75,17 @@ clawhub install agent-memory-tools
 
 See [SKILL.md](SKILL.md) for agent integration details.
 
+**Compatible with OpenClaw 2026.3.23+** — uses `openclaw/plugin-sdk/core` API.
+
+### OpenClaw Plugin (auto-recall/capture)
+
+We also maintain a companion OpenClaw plugin (`memory-convex`) that hooks into the gateway for automatic memory injection:
+- **before_prompt_build** → searches facts and injects them before each message
+- **agent_end** → extracts and stores new facts after each response
+- Temporal scoring, boot audit, .md sync
+
+This plugin is designed for local use (`~/.openclaw/extensions/memory-convex/`). See [openclaw-memory-convex](https://github.com/Hello-Primo/openclaw-memory-convex) for the source.
+
 ## Configuration
 
 See [references/configuration.md](references/configuration.md) for the full guide, including:
@@ -125,6 +136,24 @@ python3 scripts/benchmark.py --verbose
 ```bash
 python3 scripts/tests.py    # 28 unit tests
 ```
+
+## Compatibility
+
+| Platform | Status |
+|----------|--------|
+| OpenClaw 2026.3.23+ | ✅ Tested |
+| OpenClaw 2026.3.13–2026.3.22 | ✅ Compatible |
+| Ollama | ✅ Tested (nomic-embed-text-v2-moe, gemma3:4b) |
+| LM Studio | ✅ Tested (GPT-OSS 20B, Qwen 35B) |
+| OpenAI API | ✅ Compatible |
+| OpenRouter | ✅ Compatible |
+| Python | 3.9+ |
+| OS | macOS, Linux, Windows |
+
+## Related
+
+- **[memory-convex](https://github.com/Hello-Primo/openclaw-memory-convex)** — OpenClaw gateway plugin for auto-recall/capture via Convex
+- **[ClawHub](https://clawhub.ai/primo-studio/agent-memory-tools)** — Install as OpenClaw skill
 
 ## License
 
