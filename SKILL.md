@@ -5,6 +5,8 @@ description: Searches, stores, and manages agent memory across 4 sources (fact s
 
 # Agent Memory Tools
 
+> ⚠️ **Superseded by [Memoria](https://clawhub.ai/nieto42/openclaw-memoria)** — a native OpenClaw plugin with 12 memory layers, fact clusters, observations, and an interactive install wizard. Install: `clawhub install openclaw-memoria`
+
 Multi-source memory recall and fact management. Runs locally via Ollama (0€).
 
 ## Architecture

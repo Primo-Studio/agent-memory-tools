@@ -1,5 +1,9 @@
 # 🧠 Agent Memory Tools
-> **⚠️ This project has been superseded by [Memoria](https://github.com/Primo-Studio/openclaw-memoria)** — a native OpenClaw plugin with multi-layer memory (SQLite + FTS5 + embeddings + knowledge graph + topics + adaptive budget). If you're using OpenClaw, switch to Memoria for a fully integrated experience.
+> **⚠️ This project has been superseded by [Memoria](https://github.com/Primo-Studio/openclaw-memoria)** — a native OpenClaw plugin with 12 memory layers, fact clusters, observations, semantic/episodic decay, and an interactive install wizard.
+>
+> **Install Memoria:**
+> - Skill: [`clawhub install openclaw-memoria`](https://clawhub.ai/nieto42/openclaw-memoria)
+> - Plugin: [`openclaw plugins install memoria-plugin`](https://clawhub.ai/nieto42/memoria-plugin)
 >
 > This repository remains available as a reference for the Python-based retrieval pipeline and benchmarks.
 
